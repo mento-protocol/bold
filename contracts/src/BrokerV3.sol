@@ -230,12 +230,14 @@ contract Broker is Ownable {
 
         // Get the rate
         (uint256 rateNumerator, uint256 rateDenominator) = getRate(rateFeedId);
-
         amountOut = (amountIn * rateNumerator * 1e18) / rateDenominator;
 
         ICollateralRegistry collateralRegistry = ICollateralRegistry(
             stableTokenToCollateralRegistry[from]
         );
+
+        // Transfer the from token to this contract
+        IERC20(from).transferFrom(msg.sender, address(this), amountIn);
 
         // Approve the collateral registry to spend the from token of this contract
         IERC20(from).approve(address(collateralRegistry), amountIn);
@@ -253,6 +255,9 @@ contract Broker is Ownable {
         uint256 collateralReceived = IERC20(collateralToken).balanceOf(
             address(this)
         ) - collateralBalanceBefore;
+
+        // Allow stability pool to spend the collateral
+        IERC20(collateralToken).approve(toStabilityPool, collateralReceived);
 
         // Call the collateralSwapIn
         IStabilityPool(toStabilityPool).collateralSwapIn(
