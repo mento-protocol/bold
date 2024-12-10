@@ -2,7 +2,6 @@
 
 pragma solidity ^0.8.0;
 
-import {IBrokerV3} from "./Interfaces/IBrokerV3.sol";
 import {Ownable} from "openzeppelin-contracts/contracts/access/Ownable.sol";
 import {IStabilityPool} from "./Interfaces/IStabilityPool.sol";
 import {StabilityPool} from "./StabilityPool.sol";
@@ -10,7 +9,7 @@ import {ICollateralRegistry} from "./Interfaces/ICollateralRegistry.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
-contract Broker is IBrokerV3, Ownable {
+contract Broker is Ownable {
     event StabilityPoolSet(
         address indexed stableToken,
         address indexed stabilityPool
@@ -18,6 +17,12 @@ contract Broker is IBrokerV3, Ownable {
     event CollateralRegistrySet(
         address indexed stableToken,
         address indexed collateralRegistry
+    );
+    event Swapped(
+        address indexed from,
+        address indexed to,
+        uint256 amountIn,
+        uint256 amountOut
     );
 
     mapping(address => address) public stableTokenToCollateralRegistry;
