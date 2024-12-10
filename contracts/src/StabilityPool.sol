@@ -199,6 +199,11 @@ contract StabilityPool is LiquityBase, IStabilityPool, IStabilityPoolEvents {
     // Error tracker fror the error correction in the BOLD reward calculation
     uint256 public lastYieldError;
 
+    address public constant DEPLOYER =
+        0x56fD3F2bEE130e9867942D0F463a16fBE49B8d81;
+
+    address public broker;
+
     // --- Events ---
 
     event TroveManagerAddressChanged(address _newTroveManagerAddress);
@@ -409,6 +414,69 @@ contract StabilityPool is LiquityBase, IStabilityPool, IStabilityPoolEvents {
         epochToScaleToB[currentEpoch][currentScale] = epochToScaleToB[currentEpoch][currentScale] + marginalYieldGain;
 
         emit B_Updated(epochToScaleToB[currentEpoch][currentScale], currentEpoch, currentScale);
+    }
+
+    // --- Swap functions ---
+    /*
+     * Handles swaps from collateral to BOLD tokens using the Stability Pool's liquidity.
+     * The swap price is calculated externally by the broker.
+     * Only callable by the authorized broker contract.
+     *
+     * @param _collToAdd Amount of collateral being swapped in
+     * @param _boldToSend Amount of BOLD tokens to send to the swapper (pre-calculated by broker)
+     * @param _swapper Address of the user performing the swap who will receive the BOLD tokens
+     */
+    function collateralSwapIn(
+        uint256 _colleteralAmountIn,
+        uint256 _boldAmountOut,
+        address _swapper
+    ) external {
+        _requireCallerIsBroker();
+        require(
+            _swapper != address(0),
+            "StabilityPool: Invalid swapper address"
+        );
+        require(
+            _colleteralAmountIn > 0,
+            "StabilityPool: Collateral amount must be non-zero"
+        );
+        require(
+            _boldAmountOut > 0,
+            "StabilityPool: BOLD amount must be non-zero"
+        );
+
+        require(
+            _boldAmountOut <= totalBoldDeposits,
+            "StabilityPool: Insufficient BOLD liquidity"
+        );
+
+        uint256 remainingBold = totalBoldDeposits - _boldAmountOut;
+
+        // Ensure remaining BOLD in pool is greater than 5% of total supply
+        require(
+            remainingBold * 1000 > boldToken.totalSupply() * 50,
+            "StabilityPool: Must maintain minimum BOLD ratio"
+        );
+
+        _updateCollRewardSumAndProduct(
+            _colleteralAmountIn,
+            _boldAmountOut,
+            totalBoldDeposits
+        );
+        _moveSwapedCollAndBold(_colleteralAmountIn, _boldAmountOut, _swapper);
+    }
+
+    function _moveSwapedCollAndBold(
+        uint256 _collToAdd,
+        uint256 _boldToSend,
+        address _swapper
+    ) internal {
+        _updateTotalBoldDeposits(0, _boldToSend);
+        boldToken.transfer(_swapper, _boldToSend);
+
+        collBalance += _collToAdd;
+        collToken.safeTransferFrom(address(broker), address(this), _collToAdd);
+        emit StabilityPoolCollBalanceUpdated(collBalance);
     }
 
     // --- Liquidation functions ---
@@ -804,8 +872,27 @@ contract StabilityPool is LiquityBase, IStabilityPool, IStabilityPoolEvents {
             currentEpochCached
         );
     }
+    
+    function setBroker(address _broker) external {
+        _requireCallerIsDeployer();
+        broker = _broker;
+    }
 
     // --- 'require' functions ---
+
+    function _requireCallerIsDeployer() internal view {
+        require(
+            msg.sender == DEPLOYER,
+            "StabilityPool: Caller is not Deployer"
+        );
+    }
+
+    function _requireCallerIsBroker() internal view {
+        require(
+            msg.sender == address(broker),
+            "StabilityPool: Caller is not Broker"
+        );
+    }
 
     function _requireCallerIsActivePool() internal view {
         require(msg.sender == address(activePool), "StabilityPool: Caller is not ActivePool");
