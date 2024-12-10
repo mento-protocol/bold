@@ -107,6 +107,21 @@ contract Broker is Ownable {
             1e18;
     }
 
+    function getAmountIn(
+        address from,
+        address to,
+        uint256 amountOut
+    ) external view returns (uint256 amountIn) {
+        bytes32 rateFeedId = getRateFeedId(
+            IERC20Metadata(from).symbol(),
+            IERC20Metadata(to).symbol()
+        );
+        (uint256 rateNumerator, uint256 rateDenominator) = getRate(rateFeedId);
+        amountIn =
+            ((amountOut * rateDenominator * 1e18) / rateNumerator) /
+            1e18;
+    }
+
     //==================================  Admin Setter Functions  ======================================= //
 
     function setCollateralRegistry(
