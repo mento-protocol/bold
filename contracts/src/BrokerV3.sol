@@ -9,6 +9,10 @@ import {ICollateralRegistry} from "./Interfaces/ICollateralRegistry.sol";
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
+// BOLD_1=0x47c88261347feecc2481c714fd4d6995b9638729 -> cREAL
+// BOLD_2=0x85a14e14309dd9beea55d69512e283f898e1425b -> cEUR
+// WETH=0xb6900011ff85da0f990be424aa88f4dbf2442584 -> cUSD
+
 contract Broker is Ownable {
     event StabilityPoolSet(
         address indexed stableToken,
@@ -28,6 +32,9 @@ contract Broker is Ownable {
     mapping(address => address) public stableTokenToCollateralRegistry;
     mapping(address => address) public stableTokenToStabilityPool;
 
+    mapping(address => string) public smokeAndMirrors;
+    mapping(string => address) public mirrorsAndSmoke;
+
     // Mapping for fake exchange
     mapping(bytes32 => Rate) public exchangeRates;
 
@@ -37,6 +44,14 @@ contract Broker is Ownable {
     }
 
     constructor() {
+        smokeAndMirrors[0x47C88261347fEecc2481c714Fd4D6995B9638729] = "cREAL";
+        smokeAndMirrors[0x85a14e14309DD9BEea55d69512e283F898E1425b] = "cEUR";
+        smokeAndMirrors[0xb6900011Ff85dA0f990bE424Aa88F4dBf2442584] = "cUSD";
+
+        mirrorsAndSmoke["cREAL"] = 0x47C88261347fEecc2481c714Fd4D6995B9638729;
+        mirrorsAndSmoke["cEUR"] = 0x85a14e14309DD9BEea55d69512e283F898E1425b;
+        mirrorsAndSmoke["cUSD"] = 0xb6900011Ff85dA0f990bE424Aa88F4dBf2442584;
+
         seedExchangeRates();
     }
 
@@ -97,10 +112,15 @@ contract Broker is Ownable {
         address to,
         uint256 amountIn
     ) external view returns (uint256 amountOut) {
-        bytes32 rateFeedId = getRateFeedId(
-            IERC20Metadata(from).symbol(),
-            IERC20Metadata(to).symbol()
-        );
+        // Get the symbol of the from token
+        string memory fromSymbol = smokeAndMirrors[from];
+        require(bytes(fromSymbol).length > 0, "From token not supported");
+
+        // Get the symbol of the to token
+        string memory toSymbol = smokeAndMirrors[to];
+        require(bytes(toSymbol).length > 0, "To token not supported");
+
+        bytes32 rateFeedId = getRateFeedId(fromSymbol, toSymbol);
         (uint256 rateNumerator, uint256 rateDenominator) = getRate(rateFeedId);
         amountOut =
             ((amountIn * rateNumerator * 1e18) / rateDenominator) /
@@ -112,10 +132,15 @@ contract Broker is Ownable {
         address to,
         uint256 amountOut
     ) external view returns (uint256 amountIn) {
-        bytes32 rateFeedId = getRateFeedId(
-            IERC20Metadata(from).symbol(),
-            IERC20Metadata(to).symbol()
-        );
+        // Get the symbol of the from token
+        string memory fromSymbol = smokeAndMirrors[from];
+        require(bytes(fromSymbol).length > 0, "From token not supported");
+
+        // Get the symbol of the to token
+        string memory toSymbol = smokeAndMirrors[to];
+        require(bytes(toSymbol).length > 0, "To token not supported");
+
+        bytes32 rateFeedId = getRateFeedId(fromSymbol, toSymbol);
         (uint256 rateNumerator, uint256 rateDenominator) = getRate(rateFeedId);
         amountIn =
             ((amountOut * rateDenominator * 1e18) / rateNumerator) /
@@ -187,11 +212,21 @@ contract Broker is Ownable {
             "Insufficient allowance"
         );
 
-        // Get the ratefeedId
-        bytes32 rateFeedId = getRateFeedId(
-            IERC20Metadata(address(collateralToken)).symbol(),
-            IERC20Metadata(to).symbol()
+        // Get the symbol of the collateral token
+        string memory collateralSymbol = smokeAndMirrors[
+            address(collateralToken)
+        ];
+        require(
+            bytes(collateralSymbol).length > 0,
+            "Collateral token not supported"
         );
+
+        // Get the symbol of the to token
+        string memory toSymbol = smokeAndMirrors[to];
+        require(bytes(toSymbol).length > 0, "To token not supported");
+
+        // Get the ratefeedId
+        bytes32 rateFeedId = getRateFeedId(collateralSymbol, toSymbol);
 
         // Get the rate
         (uint256 rateNumerator, uint256 rateDenominator) = getRate(rateFeedId);
@@ -241,11 +276,16 @@ contract Broker is Ownable {
             "StabilityPool not set for to token"
         );
 
+        // Get the symbol of the from token
+        string memory fromSymbol = smokeAndMirrors[from];
+        require(bytes(fromSymbol).length > 0, "From token not supported");
+
+        // Get the symbol of the to token
+        string memory toSymbol = smokeAndMirrors[to];
+        require(bytes(toSymbol).length > 0, "To token not supported");
+
         // Get the rate feed id
-        bytes32 rateFeedId = getRateFeedId(
-            IERC20Metadata(from).symbol(),
-            IERC20Metadata(to).symbol()
-        );
+        bytes32 rateFeedId = getRateFeedId(fromSymbol, toSymbol);
 
         // Get the rate
         (uint256 rateNumerator, uint256 rateDenominator) = getRate(rateFeedId);
