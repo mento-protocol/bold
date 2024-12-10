@@ -448,7 +448,15 @@ contract StabilityPool is LiquityBase, IStabilityPool, IStabilityPoolEvents {
         require(
             _boldAmountOut <= totalBoldDeposits,
             "StabilityPool: Insufficient BOLD liquidity"
-        ); // TODO: come up with a limit
+        );
+
+        uint256 remainingBold = totalBoldDeposits - _boldAmountOut;
+
+        // Ensure remaining BOLD in pool is greater than 5% of total supply
+        require(
+            remainingBold * 1000 > boldToken.totalSupply() * 50,
+            "StabilityPool: Must maintain minimum BOLD ratio"
+        );
 
         _updateCollRewardSumAndProduct(
             _colleteralAmountIn,
