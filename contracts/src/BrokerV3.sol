@@ -102,7 +102,9 @@ contract Broker is Ownable {
             IERC20Metadata(to).symbol()
         );
         (uint256 rateNumerator, uint256 rateDenominator) = getRate(rateFeedId);
-        amountOut = (amountIn * rateNumerator * 1e18) / rateDenominator;
+        amountOut =
+            ((amountIn * rateNumerator * 1e18) / rateDenominator) /
+            1e18;
     }
 
     //==================================  Admin Setter Functions  ======================================= //
@@ -178,7 +180,9 @@ contract Broker is Ownable {
 
         // Get the rate
         (uint256 rateNumerator, uint256 rateDenominator) = getRate(rateFeedId);
-        amountOut = (amountIn * rateNumerator * 1e18) / rateDenominator;
+        amountOut =
+            ((amountIn * rateNumerator * 1e18) / rateDenominator) /
+            1e18;
 
         // Transfer collateral to the broker
         collateralToken.transferFrom(msg.sender, address(this), amountIn);
@@ -230,7 +234,9 @@ contract Broker is Ownable {
 
         // Get the rate
         (uint256 rateNumerator, uint256 rateDenominator) = getRate(rateFeedId);
-        amountOut = (amountIn * rateNumerator * 1e18) / rateDenominator;
+        amountOut =
+            ((amountIn * rateNumerator * 1e18) / rateDenominator) /
+            1e18;
 
         ICollateralRegistry collateralRegistry = ICollateralRegistry(
             stableTokenToCollateralRegistry[from]
