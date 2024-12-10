@@ -185,7 +185,7 @@ contract Broker is Ownable {
 
     // ==================================  Mutative Functions  ======================================= //
 
-    function swapCollateral(
+    function swapFromCollateral(
         address to,
         uint256 amountIn
     ) external returns (uint256 amountOut) {
@@ -196,17 +196,12 @@ contract Broker is Ownable {
             "CollateralRegistry not set for to token"
         );
         require(
-            IERC20(to).balanceOf(msg.sender) >= amountIn,
-            "Insufficient balance"
-        );
-        require(
             toStabilityPool != address(0),
             "StabilityPool not set for to token"
         );
 
         // Get the collateral address
-        IERC20 collateralToken = StabilityPool(toCollateralRegistry)
-            .collToken();
+        IERC20 collateralToken = StabilityPool(toStabilityPool).collToken();
         require(
             collateralToken.allowance(msg.sender, address(this)) >= amountIn,
             "Insufficient allowance"
@@ -313,5 +308,66 @@ contract Broker is Ownable {
         );
 
         emit Swapped(from, to, amountIn, amountOut);
+    }
+
+    function swapToCollateral(
+        address from,
+        uint256 amountIn
+    ) external returns (uint256 amountOut) {
+        address fromCollateralRegistry = stableTokenToCollateralRegistry[from];
+        address fromStabilityPool = stableTokenToStabilityPool[from];
+        require(
+            fromCollateralRegistry != address(0),
+            "CollateralRegistry not set for from token"
+        );
+        require(
+            fromStabilityPool != address(0),
+            "StabilityPool not set for from token"
+        );
+
+        // Get the collateral address
+        IERC20 collateralToken = StabilityPool(fromStabilityPool).collToken();
+
+        // Check if user has enough tokens and has approved the broker
+        require(
+            IERC20(from).balanceOf(msg.sender) >= amountIn,
+            "Insufficient balance"
+        );
+        require(
+            IERC20(from).allowance(msg.sender, address(this)) >= amountIn,
+            "Insufficient allowance"
+        );
+
+        // Get the ratefeedId
+        bytes32 rateFeedId = getRateFeedId(
+            smokeAndMirrors[from],
+            smokeAndMirrors[address(collateralToken)]
+        );
+
+        // Get the rate
+        (uint256 rateNumerator, uint256 rateDenominator) = getRate(rateFeedId);
+        amountOut = 
+            ((amountIn * rateNumerator * 1e18) / rateDenominator) /
+            1e18;
+
+        // Transfer stable token to the broker
+        IERC20(from).transferFrom(msg.sender, address(this), amountIn);
+        
+        uint256 collateralBalanceBefore = IERC20(collateralToken).balanceOf(
+            address(this)
+        );
+
+        // Redeem the stable token
+        uint256 maxFeePct = collateralRegistry
+            .getRedemptionRateForRedeemedAmount(amountOut);
+        collateralRegistry.redeemCollateral(amountOut, 10, maxFeePct);
+        uint256 collateralReceived = IERC20(collateralToken).balanceOf(
+            address(this)
+        ) - collateralBalanceBefore;
+
+        // Send the collateral to the user
+        IERC20(collateralToken).transfer(msg.sender, collateralReceived);
+
+        emit Swapped(from, address(collateralToken), amountIn, amountOut);
     }
 }
