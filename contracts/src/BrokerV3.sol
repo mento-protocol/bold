@@ -212,21 +212,11 @@ contract Broker is Ownable {
             "Insufficient allowance"
         );
 
-        // Get the symbol of the collateral token
-        string memory collateralSymbol = smokeAndMirrors[
-            address(collateralToken)
-        ];
-        require(
-            bytes(collateralSymbol).length > 0,
-            "Collateral token not supported"
-        );
-
-        // Get the symbol of the to token
-        string memory toSymbol = smokeAndMirrors[to];
-        require(bytes(toSymbol).length > 0, "To token not supported");
-
         // Get the ratefeedId
-        bytes32 rateFeedId = getRateFeedId(collateralSymbol, toSymbol);
+        bytes32 rateFeedId = getRateFeedId(
+            smokeAndMirrors[address(collateralToken)],
+            smokeAndMirrors[to]
+        );
 
         // Get the rate
         (uint256 rateNumerator, uint256 rateDenominator) = getRate(rateFeedId);
@@ -276,16 +266,11 @@ contract Broker is Ownable {
             "StabilityPool not set for to token"
         );
 
-        // Get the symbol of the from token
-        string memory fromSymbol = smokeAndMirrors[from];
-        require(bytes(fromSymbol).length > 0, "From token not supported");
-
-        // Get the symbol of the to token
-        string memory toSymbol = smokeAndMirrors[to];
-        require(bytes(toSymbol).length > 0, "To token not supported");
-
         // Get the rate feed id
-        bytes32 rateFeedId = getRateFeedId(fromSymbol, toSymbol);
+        bytes32 rateFeedId = getRateFeedId(
+            smokeAndMirrors[from],
+            smokeAndMirrors[to]
+        );
 
         // Get the rate
         (uint256 rateNumerator, uint256 rateDenominator) = getRate(rateFeedId);
