@@ -25,10 +25,10 @@ contract ERC20Faucet is ERC20Permit, Ownable {
     }
 
     function tapTo(address receiver) public {
-        uint256 timeNow = _requireNotRecentlyTapped(receiver);
+        // uint256 timeNow = _requireNotRecentlyTapped(receiver);
 
         _mint(receiver, tapAmount);
-        lastTapped[receiver] = timeNow;
+        lastTapped[receiver] = block.timestamp;
     }
 
     function tap() external {

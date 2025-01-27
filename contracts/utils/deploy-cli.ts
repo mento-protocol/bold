@@ -14,6 +14,7 @@ Arguments:
                   - local: Deploy to a local network
                   - mainnet: Deploy to the Ethereum mainnet
                   - liquity-testnet: Deploy to the Liquity v2 testnet
+                  - alfajores: Deploy to the Alfajores testnet
 
 
 Options:
@@ -111,6 +112,13 @@ export async function main() {
     options.rpcUrl ??= "https://testnet.liquity.org/rpc";
     options.verifier ??= "sourcify";
     options.verifierUrl ??= "https://testnet.liquity.org/sourcify/server";
+  }
+
+  // network preset: alfajores
+  if (networkPreset === "alfajores") {
+    options.chainId ??= 44787;
+    options.rpcUrl ??= "https://alfajores-forno.celo-testnet.org";
+    options.verifier ??= "sourcify";
   }
 
   // network preset: mainnet
@@ -259,7 +267,7 @@ Deploying Liquity contracts with the following settings:
   if (options.debug) {
     $.verbose = true;
   }
-
+  console.log({ forgeArgs });
   // deploy
   await $(options.debug ? { stdio: "inherit" } : {})`forge ${forgeArgs}`;
 
