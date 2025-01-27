@@ -36,8 +36,6 @@ Options:
                                            - complete (default),
                                            - bold-only,
                                            - use-existing-bold.
-  --open-demo-troves                       Open demo troves after deployment (local
-                                           only).
   --rpc-url <RPC_URL>                      RPC URL to use.
   --salt <SALT>                            Use keccak256(bytes(SALT)) as CREATE2
                                            salt instead of block timestamp.
@@ -70,7 +68,6 @@ const argv = minimist(process.argv.slice(2), {
   string: [
     "debug",
     "help",
-    "open-demo-troves",
     "verify",
     "dry-run",
     "slow",
@@ -221,7 +218,6 @@ Deploying Liquity contracts with the following settings:
   EPOCH_START:            ${options.epochStart ? options.epochStart : chalk.yellow("auto based on block.timestamp will be used !!")}
   ETHERSCAN_API_KEY:      ${options.etherscanApiKey && "(secret)"}
   LEDGER_PATH:            ${options.ledgerPath}
-  OPEN_DEMO_TROVES:       ${options.openDemoTroves ? "yes" : "no"}
   RPC_URL:                ${options.rpcUrl}
   USE_TESTNET_PRICEFEEDS: ${options.useTestnetPricefeeds ? "yes" : "no"}
   VERIFY:                 ${options.verify ? "yes" : "no"}
@@ -250,11 +246,6 @@ Deploying Liquity contracts with the following settings:
   process.env.DEPLOYMENT_MODE = options.mode;
   process.env.SALT = options.salt;
   process.env.EPOCH_START = String(options.epochStart);
-
-  if (options.openDemoTroves) {
-    process.env.OPEN_DEMO_TROVES = "true";
-  }
-
   if (options.useTestnetPricefeeds) {
     process.env.USE_TESTNET_PRICEFEEDS = "true";
   }
@@ -392,7 +383,6 @@ async function parseArgs() {
     ledgerPath: argv["ledger-path"],
     mode: argv["mode"],
     salt: argv["salt"],
-    openDemoTroves: argv["open-demo-troves"],
     rpcUrl: argv["rpc-url"],
     dryRun: argv["dry-run"],
     skipConfirmation: argv["skip-confirmation"],
@@ -416,7 +406,6 @@ async function parseArgs() {
   options.help = parseBool(options.help);
   options.ledgerPath ??= process.env.LEDGER_PATH;
   options.mode ??= process.env.DEPLOYMENT_MODE;
-  options.openDemoTroves = parseBool(options.openDemoTroves, process.env.OPEN_DEMO_TROVES);
   options.rpcUrl ??= process.env.RPC_URL;
   options.salt ??= process.env.SALT;
   options.skipConfirmation = parseBool(options.skipConfirmation, process.env.SKIP_CONFIRMATION);

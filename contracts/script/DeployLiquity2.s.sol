@@ -117,14 +117,6 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         uint256 i;
     }
 
-    struct DemoTroveParams {
-        uint256 collIndex;
-        uint256 owner;
-        uint256 ownerIndex;
-        uint256 coll;
-        uint256 debt;
-        uint256 annualInterestRate;
-    }
 
     struct DeploymentResult {
         LiquityContracts[] contractsArray;
@@ -253,110 +245,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             "deployment-manifest.json",
             _getManifestJson(deployed)
         );
-
-        if (vm.envOr("OPEN_DEMO_TROVES", false)) {
-            // Anvil default accounts
-            // TODO: get accounts from env
-            uint256[] memory demoAccounts = new uint256[](8);
-            demoAccounts[
-                0
-            ] = 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80;
-            demoAccounts[
-                1
-            ] = 0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d;
-            demoAccounts[
-                2
-            ] = 0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a;
-            demoAccounts[
-                3
-            ] = 0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6;
-            demoAccounts[
-                4
-            ] = 0x47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a;
-            demoAccounts[
-                5
-            ] = 0x8b3a350cf5c34c9194ca85829a2df0ec3153be0318b5e2d3348e872092edffba;
-            demoAccounts[
-                6
-            ] = 0x92db14e403b83dfe3df233f83dfa3a0d7096f21ca9b0d6d6b8d88b2b4ec1564e;
-            demoAccounts[
-                7
-            ] = 0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356;
-
-            DemoTroveParams[] memory demoTroves = new DemoTroveParams[](8);
-
-            demoTroves[0] = DemoTroveParams(
-                0,
-                demoAccounts[0],
-                0,
-                25e18,
-                2800e18,
-                5.0e16
-            );
-            demoTroves[1] = DemoTroveParams(
-                0,
-                demoAccounts[1],
-                0,
-                37e18,
-                2400e18,
-                4.7e16
-            );
-            demoTroves[2] = DemoTroveParams(
-                0,
-                demoAccounts[2],
-                0,
-                30e18,
-                4000e18,
-                3.3e16
-            );
-            demoTroves[3] = DemoTroveParams(
-                0,
-                demoAccounts[3],
-                0,
-                65e18,
-                6000e18,
-                4.3e16
-            );
-
-            demoTroves[4] = DemoTroveParams(
-                0,
-                demoAccounts[4],
-                0,
-                19e18,
-                2280e18,
-                5.0e16
-            );
-            demoTroves[5] = DemoTroveParams(
-                0,
-                demoAccounts[5],
-                0,
-                48.37e18,
-                4400e18,
-                4.7e16
-            );
-            demoTroves[6] = DemoTroveParams(
-                0,
-                demoAccounts[6],
-                0,
-                33.92e18,
-                5500e18,
-                3.8e16
-            );
-            demoTroves[7] = DemoTroveParams(
-                0,
-                demoAccounts[7],
-                0,
-                47.2e18,
-                6000e18,
-                4.3e16
-            );
-
-            for (uint256 i = 0; i < deployed.contractsArray.length; i++) {
-                tapFaucet(demoAccounts, deployed.contractsArray[i]);
-            }
-
-            openDemoTroves(demoTroves, deployed.contractsArray);
-        }
+       
     }
 
     function tapFaucet(
@@ -383,53 +272,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         }
     }
 
-    function openDemoTroves(
-        DemoTroveParams[] memory demoTroves,
-        LiquityContracts[] memory contractsArray
-    ) internal {
-        for (uint256 i = 0; i < demoTroves.length; i++) {
-            DemoTroveParams memory trove = demoTroves[i];
-            LiquityContracts memory contracts = contractsArray[trove.collIndex];
-
-            vm.startBroadcast(trove.owner);
-
-            IERC20 collToken = IERC20(contracts.collToken);
-            IERC20 wethToken = IERC20(contracts.addressesRegistry.WETH());
-
-            // Approve collToken to BorrowerOperations
-            if (collToken == wethToken) {
-                wethToken.approve(
-                    address(contracts.borrowerOperations),
-                    trove.coll + ETH_GAS_COMPENSATION
-                );
-            } else {
-                wethToken.approve(
-                    address(contracts.borrowerOperations),
-                    ETH_GAS_COMPENSATION
-                );
-                collToken.approve(
-                    address(contracts.borrowerOperations),
-                    trove.coll
-                );
-            }
-
-            IBorrowerOperations(contracts.borrowerOperations).openTrove(
-                vm.addr(trove.owner), //     _owner
-                trove.ownerIndex, //         _ownerIndex
-                trove.coll, //               _collAmount
-                trove.debt, //               _boldAmount
-                0, //                        _upperHint
-                0, //                        _lowerHint
-                trove.annualInterestRate, // _annualInterestRate
-                type(uint256).max, //        _maxUpfrontFee
-                address(0), //               _addManager
-                address(0), //               _removeManager
-                address(0) //                _receiver
-            );
-
-            vm.stopBroadcast();
-        }
-    }
+ 
 
     // See: https://solidity-by-example.org/app/create2/
     function getBytecode(
