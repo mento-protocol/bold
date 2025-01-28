@@ -115,6 +115,7 @@ export async function main() {
   if (networkPreset === "alfajores") {
     options.chainId ??= 44787;
     options.rpcUrl ??= "https://alfajores-forno.celo-testnet.org";
+    options.verify ??= true;
     options.verifier ??= "sourcify";
   }
 

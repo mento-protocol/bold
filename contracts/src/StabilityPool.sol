@@ -3,13 +3,14 @@
 pragma solidity 0.8.24;
 
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import "openzeppelin-contracts/contracts/proxy/utils/Initializable.sol";
 
 import "./Interfaces/IStabilityPool.sol";
 import "./Interfaces/IAddressesRegistry.sol";
 import "./Interfaces/IStabilityPoolEvents.sol";
 import "./Interfaces/ITroveManager.sol";
 import "./Interfaces/IBoldToken.sol";
-import "./Dependencies/LiquityBase.sol";
+import "./Dependencies/LiquityBaseInit.sol";
 
 /*
  * The Stability Pool holds Bold tokens deposited by Stability Pool depositors.
@@ -46,7 +47,7 @@ import "./Dependencies/LiquityBase.sol";
  * and the term d_t * (S - S_t)/P_t gives us the deposit's total accumulated Coll gain.
  *
  * Each liquidation updates the product P and sum S. After a series of liquidations, a compounded deposit and corresponding Coll gain
- * can be calculated using the initial deposit, the depositor’s snapshots of P and S, and the latest values of P and S.
+ * can be calculated using the initial deposit, the depositor's snapshots of P and S, and the latest values of P and S.
  *
  * Any time a depositor updates their deposit (withdrawal, top-up) their accumulated Coll gain is paid out, their new deposit is recorded
  * (based on their latest compounded deposit and modified by the withdrawal/top-up), and they receive new snapshots of the latest P and S.
@@ -125,14 +126,14 @@ import "./Dependencies/LiquityBase.sol";
  *
  *
  */
-contract StabilityPool is LiquityBase, IStabilityPool, IStabilityPoolEvents {
+contract StabilityPool is Initializable, LiquityBaseInit, IStabilityPool, IStabilityPoolEvents {
     using SafeERC20 for IERC20;
 
     string public constant NAME = "StabilityPool";
 
-    IERC20 public immutable collToken;
-    ITroveManager public immutable troveManager;
-    IBoldToken public immutable boldToken;
+    IERC20 public collToken;
+    ITroveManager public troveManager;
+    IBoldToken public boldToken;
 
     uint256 internal collBalance; // deposited coll tracker
 
@@ -204,7 +205,14 @@ contract StabilityPool is LiquityBase, IStabilityPool, IStabilityPoolEvents {
     event TroveManagerAddressChanged(address _newTroveManagerAddress);
     event BoldTokenAddressChanged(address _newBoldTokenAddress);
 
-    constructor(IAddressesRegistry _addressesRegistry) LiquityBase(_addressesRegistry) {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(IAddressesRegistry _addressesRegistry) public initializer {
+        __LiquityBase_init(_addressesRegistry);
+        
         collToken = _addressesRegistry.collToken();
         troveManager = _addressesRegistry.troveManager();
         boldToken = _addressesRegistry.boldToken();

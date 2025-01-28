@@ -5,6 +5,8 @@ import {StdCheats} from "forge-std/StdCheats.sol";
 import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
 import {IERC20 as IERC20_GOV} from "openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {TransparentUpgradeableProxy} from "openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {ProxyAdmin} from "openzeppelin-contracts/contracts/proxy/transparent/ProxyAdmin.sol";
 
 import {StringFormatting} from "test/Utils/StringFormatting.sol";
 import {Accounts} from "test/TestContracts/Accounts.sol";
@@ -47,8 +49,6 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
     string constant DEPLOYMENT_MODE_BOLD_ONLY = "bold-only";
     string constant DEPLOYMENT_MODE_USE_EXISTING_BOLD = "use-existing-bold";
 
-    address WETH_ADDRESS = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address USDC_ADDRESS = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
 
     // used for gas compensation and as collateral of the first branch
     // tapping disallowed
@@ -114,6 +114,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         LiquityContracts contracts;
         bytes bytecode;
         address boldTokenAddress;
+        address stabilityPoolImpl;
         uint256 i;
     }
 
@@ -124,6 +125,8 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         IBoldToken boldToken;
         HintHelpers hintHelpers;
         MultiTroveGetter multiTroveGetter;
+        ProxyAdmin proxyAdmin;
+        address stabilityPoolImpl;
     }
 
     function run() external {
@@ -177,6 +180,9 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             keccak256(boldBytecode)
         );
         BoldToken boldToken;
+        ProxyAdmin proxyAdmin;
+
+        proxyAdmin = new ProxyAdmin();
 
         if (deploymentMode.eq(DEPLOYMENT_MODE_USE_EXISTING_BOLD)) {
             require(
@@ -236,7 +242,8 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             troveManagerParamsArray,
             collNames,
             collSymbols,
-            address(boldToken)
+            address(boldToken),
+            address(proxyAdmin)
         );
 
         vm.stopBroadcast();
@@ -286,7 +293,8 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         TroveManagerParams[] memory troveManagerParamsArray,
         string[] memory _collNames,
         string[] memory _collSymbols,
-        address _boldToken
+        address _boldToken,
+        address _proxyAdmin
     ) internal returns (DeploymentResult memory r) {
         assert(_collNames.length == troveManagerParamsArray.length - 1);
         assert(_collSymbols.length == troveManagerParamsArray.length - 1);
@@ -294,7 +302,13 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         DeploymentVars memory vars;
         vars.numCollaterals = troveManagerParamsArray.length;
         r.boldToken = BoldToken(_boldToken);
+        r.proxyAdmin = ProxyAdmin(_proxyAdmin);
 
+        // Deploy StabilityPool implementation
+        StabilityPool stabilityPoolImpl = new StabilityPool{salt: SALT}();
+        r.stabilityPoolImpl = address(stabilityPoolImpl);
+
+        
 
         r.contractsArray = new LiquityContracts[](vars.numCollaterals);
         vars.collaterals = new IERC20Metadata[](vars.numCollaterals);
@@ -341,7 +355,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             vars.addressesRegistries[vars.i] = addressesRegistry;
             vars.troveManagers[vars.i] = ITroveManager(troveManagerAddress);
         }
-
+       
         r.collateralRegistry = new CollateralRegistry(
             r.boldToken,
             vars.collaterals,
@@ -356,6 +370,8 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
                 vars.collaterals[vars.i],
                 vars.priceFeeds[vars.i],
                 r.boldToken,
+                address(r.proxyAdmin),
+                address(r.stabilityPoolImpl),
                 r.collateralRegistry,
                 vars.addressesRegistries[vars.i],
                 address(vars.troveManagers[vars.i]),
@@ -397,6 +413,8 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         IERC20Metadata _collToken,
         IPriceFeed _priceFeed,
         IBoldToken _boldToken,
+        address _proxyAdmin,
+        address _stabilityPoolImpl,
         ICollateralRegistry _collateralRegistry,
         IAddressesRegistry _addressesRegistry,
         address _troveManagerAddress,
@@ -533,9 +551,6 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         contracts.troveNFT = new TroveNFT{salt: SALT}(
             contracts.addressesRegistry
         );
-        contracts.stabilityPool = new StabilityPool{salt: SALT}(
-            contracts.addressesRegistry
-        );
         contracts.activePool = new ActivePool{salt: SALT}(
             contracts.addressesRegistry
         );
@@ -558,12 +573,29 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         );
         assert(address(contracts.troveManager) == addresses.troveManager);
         assert(address(contracts.troveNFT) == addresses.troveNFT);
-        assert(address(contracts.stabilityPool) == addresses.stabilityPool);
         assert(address(contracts.activePool) == addresses.activePool);
         assert(address(contracts.defaultPool) == addresses.defaultPool);
         assert(address(contracts.gasPool) == addresses.gasPool);
         assert(address(contracts.collSurplusPool) == addresses.collSurplusPool);
         assert(address(contracts.sortedTroves) == addresses.sortedTroves);
+
+     
+        // Deploy proxy pointing to implementation
+        bytes memory initData = abi.encodeWithSelector(
+            StabilityPool.initialize.selector,
+            contracts.addressesRegistry
+        );
+        
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
+            address(_stabilityPoolImpl),
+            address(_proxyAdmin),
+            initData
+        );
+
+        // Set proxy address as the StabilityPool
+        contracts.stabilityPool = StabilityPool(address(proxy));
+
+
 
         // Connect contracts
         _boldToken.setBranchAddresses(
@@ -572,6 +604,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             address(contracts.borrowerOperations),
             address(contracts.activePool)
         );
+
 
     }
 
@@ -811,6 +844,11 @@ function formatAmount(
                     string.concat(
                         '"multiTroveGetter":"',
                         address(deployed.multiTroveGetter).toHexString(),
+                        '",'
+                    ),
+                    string.concat(
+                        '"proxyAdmin":"',
+                        address(deployed.proxyAdmin).toHexString(),
                         '",'
                     ),
                     string.concat('"branches":[', branches.join(","), "],")
