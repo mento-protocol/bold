@@ -49,9 +49,10 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
     string constant DEPLOYMENT_MODE_BOLD_ONLY = "bold-only";
     string constant DEPLOYMENT_MODE_USE_EXISTING_BOLD = "use-existing-bold";
 
+    address cUSD_ALFAJORES_ADDRESS = 0x874069Fa1Eb16D44d622F2e0Ca25eeA172369bC1;
+    IERC20Metadata cUSD = IERC20Metadata(cUSD_ALFAJORES_ADDRESS);
 
-    // used for gas compensation and as collateral of the first branch
-    // tapping disallowed
+  
     IWETH WETH;
     IERC20Metadata USDC;
     address ETH_ORACLE_ADDRESS = 0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419;
@@ -215,13 +216,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         if (block.chainid == 31337) {
             // local
             WETH = new WETHTester({_tapAmount: 100 ether, _tapPeriod: 1 days});
-        } else {
-            // sepolia
-            WETH = new WETHTester({
-                _tapAmount: 0,
-                _tapPeriod: type(uint256).max
-            });
-        }
+        } 
         USDC = new ERC20Faucet("USDC", "USDC", 0, type(uint256).max);
 
         TroveManagerParams[]
@@ -330,8 +325,8 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
 
         } else {
             // Sepolia
-            // Use WETH as collateral for the first branch
-            vars.collaterals[0] = WETH;
+            // Use cUSD as collateral for the first branch
+            vars.collaterals[0] = cUSD;
             vars.priceFeeds[0] = new PriceFeedTestnet();
 
             // Deploy plain ERC20Faucets for the rest of the branches
@@ -537,6 +532,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
                 multiTroveGetter: _multiTroveGetter,
                 collateralRegistry: _collateralRegistry,
                 boldToken: _boldToken,
+                cUSD: cUSD,
                 WETH: WETH
             });
         contracts.addressesRegistry.setAddresses(addressVars);
@@ -610,46 +606,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
 
  
 
-    function _mintBold(
-        uint256 _boldAmount,
-        uint256 _price,
-        LiquityContracts memory _contracts
-    ) internal {
-        uint256 collAmount = (_boldAmount * 2 ether) / _price; // CR of ~200%
-
-        ERC20Faucet(address(_contracts.collToken)).mint(deployer, collAmount);
-        WETHTester(payable(address(WETH))).mint(deployer, ETH_GAS_COMPENSATION);
-
-        if (_contracts.collToken == WETH) {
-            WETH.approve(
-                address(_contracts.borrowerOperations),
-                collAmount + ETH_GAS_COMPENSATION
-            );
-        } else {
-            _contracts.collToken.approve(
-                address(_contracts.borrowerOperations),
-                collAmount
-            );
-            WETH.approve(
-                address(_contracts.borrowerOperations),
-                ETH_GAS_COMPENSATION
-            );
-        }
-
-        _contracts.borrowerOperations.openTrove({
-            _owner: deployer,
-            _ownerIndex: lastTroveIndex++,
-            _ETHAmount: collAmount,
-            _boldAmount: _boldAmount,
-            _upperHint: 0,
-            _lowerHint: 0,
-            _annualInterestRate: 0.05 ether,
-            _maxUpfrontFee: type(uint256).max,
-            _addManager: address(0),
-            _removeManager: address(0),
-            _receiver: address(0)
-        });
-    }
+   
 
 function formatAmount(
         uint256 amount,

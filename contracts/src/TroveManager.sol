@@ -2,6 +2,8 @@
 
 pragma solidity 0.8.24;
 
+import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+
 import "./Interfaces/ITroveManager.sol";
 import "./Interfaces/IAddressesRegistry.sol";
 import "./Interfaces/IStabilityPool.sol";
@@ -11,7 +13,6 @@ import "./Interfaces/ISortedTroves.sol";
 import "./Interfaces/ITroveEvents.sol";
 import "./Interfaces/ITroveNFT.sol";
 import "./Interfaces/ICollateralRegistry.sol";
-import "./Interfaces/IWETH.sol";
 import "./Dependencies/LiquityBase.sol";
 
 contract TroveManager is LiquityBase, ITroveManager, ITroveEvents {
@@ -27,7 +28,7 @@ contract TroveManager is LiquityBase, ITroveManager, ITroveEvents {
     ISortedTroves public sortedTroves;
     ICollateralRegistry internal collateralRegistry;
     // Wrapped ETH for liquidation reserve (gas compensation)
-    IWETH internal immutable WETH;
+    IERC20Metadata internal immutable cUSD;
 
     // Critical system collateral ratio. If the system's total collateral ratio (TCR) falls below the CCR, some borrowing operation restrictions are applied
     uint256 public immutable CCR;
@@ -193,7 +194,7 @@ contract TroveManager is LiquityBase, ITroveManager, ITroveEvents {
         collSurplusPool = _addressesRegistry.collSurplusPool();
         boldToken = _addressesRegistry.boldToken();
         sortedTroves = _addressesRegistry.sortedTroves();
-        WETH = _addressesRegistry.WETH();
+        cUSD = _addressesRegistry.cUSD();
         collateralRegistry = _addressesRegistry.collateralRegistry();
 
         emit TroveNFTAddressChanged(address(troveNFT));
@@ -516,7 +517,7 @@ contract TroveManager is LiquityBase, ITroveManager, ITroveEvents {
 
     function _sendGasCompensation(IActivePool _activePool, address _liquidator, uint256 _eth, uint256 _coll) internal {
         if (_eth > 0) {
-            WETH.transferFrom(gasPoolAddress, _liquidator, _eth);
+            cUSD.transferFrom(gasPoolAddress, _liquidator, _eth);
         }
 
         if (_coll > 0) {

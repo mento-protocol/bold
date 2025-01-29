@@ -37,6 +37,7 @@ interface IAddressesRegistry {
         IMultiTroveGetter multiTroveGetter;
         ICollateralRegistry collateralRegistry;
         IBoldToken boldToken;
+        IERC20Metadata cUSD;
         IWETH WETH;
     }
 
@@ -63,7 +64,7 @@ interface IAddressesRegistry {
     function multiTroveGetter() external view returns (IMultiTroveGetter);
     function collateralRegistry() external view returns (ICollateralRegistry);
     function boldToken() external view returns (IBoldToken);
-    function WETH() external returns (IWETH);
-
+    function cUSD() external view returns (IERC20Metadata);
+    function WETH() external view returns (IWETH);
     function setAddresses(AddressVars memory _vars) external;
 }

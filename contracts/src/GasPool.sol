@@ -17,13 +17,13 @@ import "./Interfaces/ITroveManager.sol";
  */
 contract GasPool {
     constructor(IAddressesRegistry _addressesRegistry) {
-        IWETH WETH = _addressesRegistry.WETH();
+        IERC20Metadata cUSD = _addressesRegistry.cUSD();
         IBorrowerOperations borrowerOperations = _addressesRegistry.borrowerOperations();
         ITroveManager troveManager = _addressesRegistry.troveManager();
 
         // Allow BorrowerOperations to refund gas compensation
-        WETH.approve(address(borrowerOperations), type(uint256).max);
+        cUSD.approve(address(borrowerOperations), type(uint256).max);
         // Allow TroveManager to pay gas compensation to liquidator
-        WETH.approve(address(troveManager), type(uint256).max);
+        cUSD.approve(address(troveManager), type(uint256).max);
     }
 }
