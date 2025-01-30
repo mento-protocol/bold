@@ -456,15 +456,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
                 )
             )
         );
-        addresses.stabilityPool = vm.computeCreate2Address(
-            SALT,
-            keccak256(
-                getBytecode(
-                    type(StabilityPool).creationCode,
-                    address(contracts.addressesRegistry)
-                )
-            )
-        );
+        
         addresses.activePool = vm.computeCreate2Address(
             SALT,
             keccak256(
@@ -511,6 +503,15 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             )
         );
 
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
+            address(_stabilityPoolImpl),
+            address(_proxyAdmin),
+            ""
+        );
+
+        // Set proxy address as the StabilityPool
+        contracts.stabilityPool = StabilityPool(address(proxy));
+
         IAddressesRegistry.AddressVars memory addressVars = IAddressesRegistry
             .AddressVars({
                 collToken: _collToken,
@@ -520,7 +521,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
                 troveManager: ITroveManager(addresses.troveManager),
                 troveNFT: ITroveNFT(addresses.troveNFT),
                 metadataNFT: IMetadataNFT(addresses.metadataNFT),
-                stabilityPool: IStabilityPool(addresses.stabilityPool),
+                stabilityPool: IStabilityPool(address(proxy)),
                 priceFeed: contracts.priceFeed,
                 activePool: IActivePool(addresses.activePool),
                 defaultPool: IDefaultPool(addresses.defaultPool),
@@ -576,20 +577,10 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         assert(address(contracts.sortedTroves) == addresses.sortedTroves);
 
      
-        // Deploy proxy pointing to implementation
-        bytes memory initData = abi.encodeWithSelector(
-            StabilityPool.initialize.selector,
-            contracts.addressesRegistry
-        );
-        
-        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(
-            address(_stabilityPoolImpl),
-            address(_proxyAdmin),
-            initData
-        );
 
-        // Set proxy address as the StabilityPool
-        contracts.stabilityPool = StabilityPool(address(proxy));
+        StabilityPool(address(proxy)).initialize(contracts.addressesRegistry);
+        
+      
 
 
 
