@@ -15,7 +15,8 @@ import {ETH_GAS_COMPENSATION} from "src/Dependencies/Constants.sol";
 import {IBorrowerOperations} from "src/Interfaces/IBorrowerOperations.sol";
 import "src/AddressesRegistry.sol";
 import "src/ActivePool.sol";
-import "src/BoldToken.sol";
+//import "src/BoldToken.sol";
+import "src/StableTokenV2.sol";
 import "src/BorrowerOperations.sol";
 import "src/TroveManager.sol";
 import "src/TroveNFT.sol";
@@ -123,7 +124,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
     struct DeploymentResult {
         LiquityContracts[] contractsArray;
         ICollateralRegistry collateralRegistry;
-        IBoldToken boldToken;
+        IStableTokenV2 stableTokenV2;
         HintHelpers hintHelpers;
         MultiTroveGetter multiTroveGetter;
         ProxyAdmin proxyAdmin;
@@ -172,42 +173,49 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         _log("Use testnet PriceFeeds: ", useTestnetPriceFeeds ? "yes" : "no");
 
         // Deploy Bold or pick up existing deployment
-        bytes memory boldBytecode = bytes.concat(
-            type(BoldToken).creationCode,
-            abi.encode(deployer)
+        bytes memory stableTokenV2Bytecode = bytes.concat(
+            type(StableTokenV2).creationCode,
+            abi.encode(false)
         );
-        address boldAddress = vm.computeCreate2Address(
+        address stableTokenV2Address = vm.computeCreate2Address(
             SALT,
-            keccak256(boldBytecode)
+            keccak256(stableTokenV2Bytecode)
         );
-        BoldToken boldToken;
+        StableTokenV2 stableTokenV2;
         ProxyAdmin proxyAdmin;
 
         proxyAdmin = new ProxyAdmin();
 
         if (deploymentMode.eq(DEPLOYMENT_MODE_USE_EXISTING_BOLD)) {
             require(
-                boldAddress.code.length > 0,
-                string.concat("BOLD not found at ", boldAddress.toHexString())
+                stableTokenV2Address.code.length > 0,
+                string.concat("StableTokenV2 not found at ", stableTokenV2Address.toHexString())
             );
-            boldToken = BoldToken(boldAddress);
+            stableTokenV2 = StableTokenV2(stableTokenV2Address);
 
             // Check BOLD is untouched
-            require(boldToken.totalSupply() == 0, "Some BOLD has been minted!");
+            require(stableTokenV2.totalSupply() == 0, "Some StableTokenV2 has been minted!");
             require(
-                boldToken.collateralRegistryAddress() == address(0),
+                stableTokenV2.collateralRegistry() == address(0),
                 "Collateral registry already set"
             );
-            require(boldToken.owner() == deployer, "Not BOLD owner");
+            require(stableTokenV2.owner() == deployer, "Not StableTokenV2 owner");
         } else {
-            boldToken = new BoldToken{salt: SALT}(deployer);
-            assert(address(boldToken) == boldAddress);
+            stableTokenV2 = new StableTokenV2{salt: SALT}(false);
+            stableTokenV2.initialize(
+                "cKES Test",
+                "cKES Test",
+                new address[](0),
+                new uint256[](0)
+            );
+            stableTokenV2.initializeV2(address(deployer), address(deployer));
+            assert(address(stableTokenV2) == stableTokenV2Address);
         }
 
         if (deploymentMode.eq(DEPLOYMENT_MODE_BOLD_ONLY)) {
             vm.writeFile(
                 "deployment-manifest.json",
-                string.concat('{"boldToken":"', boldAddress.toHexString(), '"}')
+                string.concat('{"stableTokenV2":"', stableTokenV2Address.toHexString(), '"}')
             );
             return;
         }
@@ -237,7 +245,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             troveManagerParamsArray,
             collNames,
             collSymbols,
-            address(boldToken),
+            address(stableTokenV2),
             address(proxyAdmin)
         );
 
@@ -288,7 +296,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         TroveManagerParams[] memory troveManagerParamsArray,
         string[] memory _collNames,
         string[] memory _collSymbols,
-        address _boldToken,
+        address _stableTokenV2,
         address _proxyAdmin
     ) internal returns (DeploymentResult memory r) {
         assert(_collNames.length == troveManagerParamsArray.length - 1);
@@ -296,7 +304,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
 
         DeploymentVars memory vars;
         vars.numCollaterals = troveManagerParamsArray.length;
-        r.boldToken = BoldToken(_boldToken);
+        r.stableTokenV2 = StableTokenV2(_stableTokenV2);
         r.proxyAdmin = ProxyAdmin(_proxyAdmin);
 
         // Deploy StabilityPool implementation
@@ -352,7 +360,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         }
        
         r.collateralRegistry = new CollateralRegistry(
-            r.boldToken,
+            IBoldToken(address(r.stableTokenV2)),
             vars.collaterals,
             vars.troveManagers
         );
@@ -364,7 +372,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             vars.contracts = _deployAndConnectCollateralContracts(
                 vars.collaterals[vars.i],
                 vars.priceFeeds[vars.i],
-                r.boldToken,
+                r.stableTokenV2,
                 address(r.proxyAdmin),
                 address(r.stabilityPoolImpl),
                 r.collateralRegistry,
@@ -376,7 +384,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             r.contractsArray[vars.i] = vars.contracts;
         }
 
-        r.boldToken.setCollateralRegistry(address(r.collateralRegistry));
+        r.stableTokenV2.setCollateralRegistry(address(r.collateralRegistry));
 
     }
 
@@ -407,7 +415,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
     function _deployAndConnectCollateralContracts(
         IERC20Metadata _collToken,
         IPriceFeed _priceFeed,
-        IBoldToken _boldToken,
+        IStableTokenV2 _stableTokenV2,
         address _proxyAdmin,
         address _stabilityPoolImpl,
         ICollateralRegistry _collateralRegistry,
@@ -532,7 +540,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
                 hintHelpers: _hintHelpers,
                 multiTroveGetter: _multiTroveGetter,
                 collateralRegistry: _collateralRegistry,
-                boldToken: _boldToken,
+                boldToken: IBoldToken(address(_stableTokenV2)),
                 cUSD: cUSD,
                 WETH: WETH
             });
@@ -585,11 +593,11 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
 
 
         // Connect contracts
-        _boldToken.setBranchAddresses(
-            address(contracts.troveManager),
-            address(contracts.stabilityPool),
+        _stableTokenV2.setBranchAddresses(
             address(contracts.borrowerOperations),
-            address(contracts.activePool)
+            address(contracts.activePool),
+            address(contracts.stabilityPool),
+            address(contracts.troveManager)
         );
 
 
@@ -781,7 +789,7 @@ function formatAmount(
                     ),
                     string.concat(
                         '"boldToken":"',
-                        address(deployed.boldToken).toHexString(),
+                        address(deployed.stableTokenV2).toHexString(),
                         '",'
                     ),
                     string.concat(

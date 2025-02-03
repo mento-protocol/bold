@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // solhint-disable gas-custom-errors
-pragma solidity 0.8.18;
+pragma solidity 0.8.24;
 
 import { ERC20PermitUpgradeable } from "./Dependencies/patched/ERC20PermitUpgradeable.sol";
 import { ERC20Upgradeable } from "./Dependencies/patched/ERC20Upgradeable.sol";
@@ -13,12 +13,15 @@ import { IStableTokenV2 } from "./Interfaces/IStableTokenV2.sol";
 contract StableTokenV2 is ERC20PermitUpgradeable, IStableTokenV2 {
   address public validators;
   address public broker;
-  address public exchange;
+  address public borrowerOperations;
+  address public activePool;
+  address public stabilityPool;
+  address public collateralRegistry;
+  address public troveManager;
 
   event TransferComment(string comment);
   event BrokerUpdated(address broker);
   event ValidatorsUpdated(address validators);
-  event ExchangeUpdated(address exchange);
 
   /**
    * @dev Restricts a function so it can only be executed by an address that's allowed to mint.
@@ -26,7 +29,7 @@ contract StableTokenV2 is ERC20PermitUpgradeable, IStableTokenV2 {
    */
   modifier onlyMinter() {
     address sender = _msgSender();
-    require(sender == broker || sender == validators || sender == exchange, "StableTokenV2: not allowed to mint");
+    require(sender == broker || sender == validators || sender == borrowerOperations || sender == activePool, "StableTokenV2: not allowed to mint");
     _;
   }
 
@@ -44,7 +47,12 @@ contract StableTokenV2 is ERC20PermitUpgradeable, IStableTokenV2 {
    */
   modifier onlyBurner() {
     address sender = _msgSender();
-    require(sender == broker || sender == exchange, "StableTokenV2: not allowed to burn");
+    require(sender == broker || sender == stabilityPool || sender == collateralRegistry || sender == borrowerOperations || sender == troveManager, "StableTokenV2: not allowed to burn");
+    _;
+  }
+
+  modifier onlyStabilityPool() {
+    require(msg.sender == stabilityPool, "StableTokenV2: not allowed to call");
     _;
   }
 
@@ -103,13 +111,22 @@ contract StableTokenV2 is ERC20PermitUpgradeable, IStableTokenV2 {
    * @dev This function is only callable once.
    * @param _broker The address of the Broker contract.
    * @param _validators The address of the Validators contract.
-   * @param _exchange The address of the Exchange contract.
    */
-  function initializeV2(address _broker, address _validators, address _exchange) external reinitializer(2) onlyOwner {
+  function initializeV2(address _broker, address _validators) external reinitializer(2) onlyOwner {
     _setBroker(_broker);
     _setValidators(_validators);
-    _setExchange(_exchange);
     __ERC20Permit_init(symbol());
+  }
+
+  function setBranchAddresses(address _borrowerOperations, address _activePool, address _stabilityPool, address _troveManager) external override onlyOwner {
+    borrowerOperations = _borrowerOperations;
+    activePool = _activePool;
+    stabilityPool = _stabilityPool;
+    troveManager = _troveManager;
+  }
+
+  function setCollateralRegistry(address _collateralRegistry) external override onlyOwner {
+    collateralRegistry = _collateralRegistry;
   }
 
   /**
@@ -128,15 +145,6 @@ contract StableTokenV2 is ERC20PermitUpgradeable, IStableTokenV2 {
    */
   function setValidators(address _validators) external onlyOwner {
     _setValidators(_validators);
-  }
-
-  /**
-   * @notice Sets the address of the Exchange contract.
-   * @dev This function is only callable by the owner.
-   * @param _exchange The address of the Exchange contract.
-   */
-  function setExchange(address _exchange) external onlyOwner {
-    _setExchange(_exchange);
   }
 
   /**
@@ -170,6 +178,18 @@ contract StableTokenV2 is ERC20PermitUpgradeable, IStableTokenV2 {
     return true;
   }
 
+  function burn(address account, uint256 value) external onlyBurner {
+    _burn(account, value);
+  }
+
+  function sendToPool(address _sender, address _poolAddress, uint256 _amount) external onlyStabilityPool override {
+    _transfer(_sender, _poolAddress, _amount);
+  }
+
+  function returnFromPool(address _poolAddress, address _receiver, uint256 _amount) external onlyStabilityPool override {
+    _transfer(_poolAddress, _receiver, _amount);
+  }
+
   /**
    * @notice Set the address of the Broker contract and emit an event
    * @param _broker The address of the Broker contract.
@@ -186,15 +206,6 @@ contract StableTokenV2 is ERC20PermitUpgradeable, IStableTokenV2 {
   function _setValidators(address _validators) internal {
     validators = _validators;
     emit ValidatorsUpdated(_validators);
-  }
-
-  /**
-   * @notice Set the address of the Exchange contract and emit an event
-   * @param _exchange The address of the Exchange contract.
-   */
-  function _setExchange(address _exchange) internal {
-    exchange = _exchange;
-    emit ExchangeUpdated(_exchange);
   }
 
   /// @inheritdoc ERC20Upgradeable

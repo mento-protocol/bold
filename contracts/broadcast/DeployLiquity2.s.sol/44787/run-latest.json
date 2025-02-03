@@ -25,7 +25,7 @@
       "contractAddress": "0x04ee12c51ecf510bdf251560fb6026b72795e380",
       "function": null,
       "arguments": [
-        "0x56fD3F2bEE130e9867942D0F463a16fBE49B8d81"
+        "false"
       ],
       "transaction": {
         "from": "0x56fd3f2bee130e9867942d0f463a16fbe49b8d81",
@@ -1940,7 +1940,7 @@
         {
           "address": "0x9fe037c5e3f286ed125e6e9e16a89e24d6dd36f8",
           "topics": [
-            "0x5ee0cae2f063ed938bb55046f6a932fb6ae792bf43624806bb90abe68a50be9b"
+            "0x28fe9b1bb8b27b863bb5635cb5bbd4e1beb7af490191ba03efe587680895b4fd"
           ],
           "data": "0x000000000000000000000000e28254adc6ee781a5a0806ed77f9ae9d795e3122",
           "blockHash": "0xdffc41d8e1f1dd8fb14071567db058216a37d2a87e4ae1cb623036cca0ac64af",
@@ -2028,7 +2028,7 @@
         {
           "address": "0x04ee12c51ecf510bdf251560fb6026b72795e380",
           "topics": [
-            "0x552e6c3035c33f04f1890bc312cbff2a7785b2e14ba719e635c5a8a754705647"
+            "0x78f058b189175430c48dc02699e3a0031ea4ff781536dc2fab847de4babdd882"
           ],
           "data": "0x000000000000000000000000e151e8c6f54668995b5a52743d6963d043eadd8f",
           "blockHash": "0xdffc41d8e1f1dd8fb14071567db058216a37d2a87e4ae1cb623036cca0ac64af",
@@ -2041,7 +2041,7 @@
         {
           "address": "0x04ee12c51ecf510bdf251560fb6026b72795e380",
           "topics": [
-            "0xd5aac92b48f52fdc22e5b14b07e3cbbd61e939d86cec15efe7db4fd82a8d1911"
+            "0x5ee0cae2f063ed938bb55046f6a932fb6ae792bf43624806bb90abe68a50be9b"
           ],
           "data": "0x0000000000000000000000009fe037c5e3f286ed125e6e9e16a89e24d6dd36f8",
           "blockHash": "0xdffc41d8e1f1dd8fb14071567db058216a37d2a87e4ae1cb623036cca0ac64af",
@@ -2054,7 +2054,7 @@
         {
           "address": "0x04ee12c51ecf510bdf251560fb6026b72795e380",
           "topics": [
-            "0x5f1db3103369b41aebc8a140eb5553e5a21d3df288ff446278b59eb15d59e2a4"
+            "0x8c537274438aa850a330284665d81a85dd38267d09e4050d416bfc94142db264"
           ],
           "data": "0x000000000000000000000000baa8fe964dc5016306369d4dbfe69bc95318ab3f",
           "blockHash": "0xdffc41d8e1f1dd8fb14071567db058216a37d2a87e4ae1cb623036cca0ac64af",
@@ -2067,7 +2067,7 @@
         {
           "address": "0x04ee12c51ecf510bdf251560fb6026b72795e380",
           "topics": [
-            "0x4be305188f36277093bee293304ff6fe86febd7140ec34b01d6130ae8e15f9d4"
+            "0x39b3d3f08f5292d52497444fc183b3915a339c0b41fb021bf52ae59505e455b2"
           ],
           "data": "0x0000000000000000000000002688675ff13d6e5ea19d53ed19f8e87bff7973fe",
           "blockHash": "0xdffc41d8e1f1dd8fb14071567db058216a37d2a87e4ae1cb623036cca0ac64af",
@@ -2094,7 +2094,7 @@
       "l1BlobBaseFeeScalar": "0x0",
       "l1Fee": "0x0",
       "l1GasPrice": "0xf",
-      "l1GasUsed": "0x8c9"
+      "l1GasUsed": "0x3092a"
     },
     {
       "status": "0x1",
@@ -2103,7 +2103,7 @@
         {
           "address": "0x04ee12c51ecf510bdf251560fb6026b72795e380",
           "topics": [
-            "0x4f8a3037ce0d3c62ab7c79fec792f6db7216b27b94e09faf499753381c33f847"
+            "0x78f058b189175430c48dc02699e3a0031ea4ff781536dc2fab847de4babdd882"
           ],
           "data": "0x000000000000000000000000eda6876e8f7fc8486efd819028c2ec780255ced1",
           "blockHash": "0xdffc41d8e1f1dd8fb14071567db058216a37d2a87e4ae1cb623036cca0ac64af",
@@ -2116,9 +2116,7 @@
         {
           "address": "0x04ee12c51ecf510bdf251560fb6026b72795e380",
           "topics": [
-            "0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0",
-            "0x00000000000000000000000056fd3f2bee130e9867942d0f463a16fbe49b8d81",
-            "0x0000000000000000000000000000000000000000000000000000000000000000"
+            "0x5ee0cae2f063ed938bb55046f6a932fb6ae792bf43624806bb90abe68a50be9b"
           ],
           "data": "0x",
           "blockHash": "0xdffc41d8e1f1dd8fb14071567db058216a37d2a87e4ae1cb623036cca0ac64af",
@@ -2153,5 +2151,5 @@
   "returns": {},
   "timestamp": 1738245578,
   "chain": 44787,
-  "commit": "8483c48b"
+  "commit": "b1963d17"
 }

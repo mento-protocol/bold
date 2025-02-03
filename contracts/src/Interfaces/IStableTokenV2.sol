@@ -66,9 +66,17 @@ interface IStableTokenV2 {
    * @dev This function is only callable once.
    * @param _broker The address of the Broker contract.
    * @param _validators The address of the Validators contract.
-   * @param _exchange The address of the Exchange contract.
    */
-  function initializeV2(address _broker, address _validators, address _exchange) external;
+  function initializeV2(address _broker, address _validators) external;
+
+  function setBranchAddresses(
+        address _troveManagerAddress,
+        address _stabilityPoolAddress,
+        address _borrowerOperationsAddress,
+        address _activePoolAddress
+    ) external;
+
+  function setCollateralRegistry(address _collateralRegistryAddress) external;
 
   /// @notice Gets the address of the Broker contract.
   function broker() external returns (address);
@@ -77,11 +85,6 @@ interface IStableTokenV2 {
    * @notice Gets the address of the Validators contract.
    */
   function validators() external returns (address);
-
-  /**
-   * @notice Gets the address of the Exchange contract.
-   */
-  function exchange() external returns (address);
 
   function debitGasFees(address from, uint256 value) external;
 
@@ -95,4 +98,8 @@ interface IStableTokenV2 {
     uint256 gatewayFee,
     uint256 baseTxFee
   ) external;
+
+  function sendToPool(address _sender, address poolAddress, uint256 _amount) external;
+
+  function returnFromPool(address poolAddress, address user, uint256 _amount) external;
 }

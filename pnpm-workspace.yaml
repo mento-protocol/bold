@@ -4,3 +4,4 @@ packages:
   - './frontend/uikit'
   - './frontend/uikit-gallery'
   - './subgraph'
+  - './deployment-testing'
