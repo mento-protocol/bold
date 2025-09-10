@@ -9,6 +9,7 @@ import "./Interfaces/IAddressesRegistry.sol";
 import "./Interfaces/IStabilityPoolEvents.sol";
 import "./Interfaces/ITroveManager.sol";
 import "./Interfaces/IBoldToken.sol";
+import "./Interfaces/ISystemParams.sol";
 import "./Dependencies/LiquityBaseInit.sol";
 
 /*
@@ -175,6 +176,8 @@ contract StabilityPool is Initializable, LiquityBaseInit, IStabilityPool, IStabi
     // Each time the scale of P shifts by SCALE_FACTOR, the scale is incremented by 1
     uint256 public currentScale;
 
+    uint256 public immutable MIN_BOLD_IN_SP;
+
     /* Coll Gain sum 'S': During its lifetime, each deposit d_t earns an Coll gain of ( d_t * [S - S_t] )/P_t, where S_t
     * is the depositor's snapshot of S taken at the time t when the deposit was made.
     *
@@ -200,12 +203,14 @@ contract StabilityPool is Initializable, LiquityBaseInit, IStabilityPool, IStabi
         }
     }
 
-    function initialize(IAddressesRegistry _addressesRegistry) external initializer {
+    function initialize(IAddressesRegistry _addressesRegistry, ISystemParams _systemParams) external initializer {
         __LiquityBase_init(_addressesRegistry);
 
         collToken = _addressesRegistry.collToken();
         troveManager = _addressesRegistry.troveManager();
         boldToken = _addressesRegistry.boldToken();
+
+        MIN_BOLD_IN_SP = _systemParams.MIN_BOLD_IN_SP();
 
         emit TroveManagerAddressChanged(address(troveManager));
         emit BoldTokenAddressChanged(address(boldToken));
