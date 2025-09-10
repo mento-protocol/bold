@@ -40,13 +40,6 @@ interface IAddressesRegistry {
         IERC20Metadata gasToken;
     }
 
-    function CCR() external returns (uint256);
-    function SCR() external returns (uint256);
-    function MCR() external returns (uint256);
-    function BCR() external returns (uint256);
-    function LIQUIDATION_PENALTY_SP() external returns (uint256);
-    function LIQUIDATION_PENALTY_REDISTRIBUTION() external returns (uint256);
-
     function collToken() external view returns (IERC20Metadata);
     function borrowerOperations() external view returns (IBorrowerOperations);
     function troveManager() external view returns (ITroveManager);
