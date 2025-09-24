@@ -5,6 +5,7 @@ pragma solidity 0.8.24;
 import "./Interfaces/ICollateralRegistry.sol";
 import "./Interfaces/IActivePool.sol";
 import "./Interfaces/ISortedTroves.sol";
+import "./Interfaces/ISystemParams.sol";
 import "./Dependencies/LiquityMath.sol";
 import "./Dependencies/Constants.sol";
 import "./Interfaces/IHintHelpers.sol";
@@ -17,8 +18,14 @@ contract HintHelpers is IHintHelpers {
 
     ICollateralRegistry public immutable collateralRegistry;
 
-    constructor(ICollateralRegistry _collateralRegistry) {
+    uint256 public immutable INTEREST_RATE_ADJ_COOLDOWN;
+    uint256 public immutable UPFRONT_INTEREST_PERIOD;
+
+    constructor(ICollateralRegistry _collateralRegistry, ISystemParams _systemParams) {
         collateralRegistry = _collateralRegistry;
+
+        INTEREST_RATE_ADJ_COOLDOWN = _systemParams.INTEREST_RATE_ADJ_COOLDOWN();
+        UPFRONT_INTEREST_PERIOD = _systemParams.UPFRONT_INTEREST_PERIOD();
     }
 
     /* getApproxHint() - return id of a Trove that is, on average, (length / numTrials) positions away in the
@@ -69,7 +76,7 @@ contract HintHelpers is IHintHelpers {
         }
     }
 
-    function _calcUpfrontFee(uint256 _debt, uint256 _avgInterestRate) internal pure returns (uint256) {
+    function _calcUpfrontFee(uint256 _debt, uint256 _avgInterestRate) internal view returns (uint256) {
         return _debt * _avgInterestRate * UPFRONT_INTEREST_PERIOD / ONE_YEAR / DECIMAL_PRECISION;
     }
 

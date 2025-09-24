@@ -38,8 +38,11 @@ contract LiquidationsLSTTest is DevTestSetup {
         stabilityPool = contracts.stabilityPool;
         troveManager = contracts.troveManager;
         mockInterestRouter = contracts.interestRouter;
+        systemParams = contracts.systemParams;
 
         MCR = troveManager.get_MCR();
+        MIN_ANNUAL_INTEREST_RATE = systemParams.MIN_ANNUAL_INTEREST_RATE();
+        MIN_BOLD_IN_SP = systemParams.MIN_BOLD_IN_SP();
 
         // Give some Coll to test accounts, and approve it to BorrowerOperations
         uint256 initialCollAmount = 10_000e18;

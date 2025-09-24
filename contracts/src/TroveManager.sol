@@ -12,6 +12,7 @@ import "./Interfaces/ITroveEvents.sol";
 import "./Interfaces/ITroveNFT.sol";
 import "./Interfaces/ICollateralRegistry.sol";
 import "./Interfaces/IWETH.sol";
+import "./Interfaces/ISystemParams.sol";
 import "./Dependencies/LiquityBase.sol";
 
 contract TroveManager is LiquityBase, ITroveManager, ITroveEvents {
@@ -42,6 +43,14 @@ contract TroveManager is LiquityBase, ITroveManager, ITroveEvents {
     uint256 internal immutable LIQUIDATION_PENALTY_SP;
     // Liquidation penalty for troves redistributed
     uint256 internal immutable LIQUIDATION_PENALTY_REDISTRIBUTION;
+
+    uint256 internal immutable COLL_GAS_COMPENSATION_DIVISOR;
+    uint256 internal immutable COLL_GAS_COMPENSATION_CAP;
+    uint256 internal immutable MIN_BOLD_IN_SP;
+    uint256 internal immutable ETH_GAS_COMPENSATION;
+    uint256 internal immutable MIN_DEBT;
+    uint256 internal immutable URGENT_REDEMPTION_BONUS;
+    uint256 internal immutable MAX_BATCH_SHARES_RATIO;
 
     // --- Data structures ---
 
@@ -186,12 +195,19 @@ contract TroveManager is LiquityBase, ITroveManager, ITroveEvents {
     event SortedTrovesAddressChanged(address _sortedTrovesAddress);
     event CollateralRegistryAddressChanged(address _collateralRegistryAddress);
 
-    constructor(IAddressesRegistry _addressesRegistry) LiquityBase(_addressesRegistry) {
-        CCR = _addressesRegistry.CCR();
-        MCR = _addressesRegistry.MCR();
-        SCR = _addressesRegistry.SCR();
-        LIQUIDATION_PENALTY_SP = _addressesRegistry.LIQUIDATION_PENALTY_SP();
-        LIQUIDATION_PENALTY_REDISTRIBUTION = _addressesRegistry.LIQUIDATION_PENALTY_REDISTRIBUTION();
+    constructor(IAddressesRegistry _addressesRegistry, ISystemParams _systemParams) LiquityBase(_addressesRegistry) {
+        CCR = _systemParams.CCR();
+        MCR = _systemParams.MCR();
+        SCR = _systemParams.SCR();
+        LIQUIDATION_PENALTY_SP = _systemParams.LIQUIDATION_PENALTY_SP();
+        LIQUIDATION_PENALTY_REDISTRIBUTION = _systemParams.LIQUIDATION_PENALTY_REDISTRIBUTION();
+        COLL_GAS_COMPENSATION_DIVISOR = _systemParams.COLL_GAS_COMPENSATION_DIVISOR();
+        COLL_GAS_COMPENSATION_CAP = _systemParams.COLL_GAS_COMPENSATION_CAP();
+        MIN_BOLD_IN_SP = _systemParams.MIN_BOLD_IN_SP();
+        ETH_GAS_COMPENSATION = _systemParams.ETH_GAS_COMPENSATION();
+        MIN_DEBT = _systemParams.MIN_DEBT();
+        URGENT_REDEMPTION_BONUS = _systemParams.URGENT_REDEMPTION_BONUS();
+        MAX_BATCH_SHARES_RATIO = _systemParams.MAX_BATCH_SHARES_RATIO();
 
         troveNFT = _addressesRegistry.troveNFT();
         borrowerOperations = _addressesRegistry.borrowerOperations();
@@ -332,7 +348,7 @@ contract TroveManager is LiquityBase, ITroveManager, ITroveEvents {
     }
 
     // Return the amount of Coll to be drawn from a trove's collateral and sent as gas compensation.
-    function _getCollGasCompensation(uint256 _coll) internal pure returns (uint256) {
+    function _getCollGasCompensation(uint256 _coll) internal view returns (uint256) {
         // _entireDebt should never be zero, but we add the condition defensively to avoid an unexpected revert
         return LiquityMath._min(_coll / COLL_GAS_COMPENSATION_DIVISOR, COLL_GAS_COMPENSATION_CAP);
     }
@@ -518,7 +534,7 @@ contract TroveManager is LiquityBase, ITroveManager, ITroveEvents {
         LiquidationValues memory _singleLiquidation,
         LiquidationValues memory totals,
         TroveChange memory troveChange
-    ) internal pure {
+    ) internal view {
         // Tally all the values with their respective running totals
         totals.collGasCompensation += _singleLiquidation.collGasCompensation;
         totals.ETHGasCompensation += ETH_GAS_COMPENSATION;
@@ -1904,7 +1920,7 @@ contract TroveManager is LiquityBase, ITroveManager, ITroveEvents {
         uint256 _currentBatchDebtShares,
         uint256 _batchDebt,
         bool _checkBatchSharesRatio
-    ) internal pure {
+    ) internal view {
         // debt / shares should be below MAX_BATCH_SHARES_RATIO
         if (_currentBatchDebtShares * MAX_BATCH_SHARES_RATIO < _batchDebt && _checkBatchSharesRatio) {
             revert BatchSharesRatioTooHigh();

@@ -9,8 +9,8 @@ import {ProxyAdmin} from "openzeppelin-contracts/contracts/proxy/transparent/Pro
 import {TransparentUpgradeableProxy} from
     "openzeppelin-contracts/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 import {IFPMMFactory} from "src/Interfaces/IFPMMFactory.sol";
+import {SystemParams} from "src/SystemParams.sol";
 
-import {ETH_GAS_COMPENSATION} from "src/Dependencies/Constants.sol";
 import {IBorrowerOperations} from "src/Interfaces/IBorrowerOperations.sol";
 import {StringFormatting} from "test/Utils/StringFormatting.sol";
 import {Accounts} from "test/TestContracts/Accounts.sol";
@@ -62,6 +62,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         GasPool gasPool;
         IInterestRouter interestRouter;
         IERC20Metadata collToken;
+        ISystemParams systemParams;
     }
 
     struct LiquityContractAddresses {
@@ -77,15 +78,6 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         address priceFeed;
         address gasPool;
         address interestRouter;
-    }
-
-    struct TroveManagerParams {
-        uint256 CCR;
-        uint256 MCR;
-        uint256 SCR;
-        uint256 BCR;
-        uint256 LIQUIDATION_PENALTY_SP;
-        uint256 LIQUIDATION_PENALTY_REDISTRIBUTION;
     }
 
     struct DeploymentVars {
@@ -115,9 +107,11 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         MultiTroveGetter multiTroveGetter;
         ProxyAdmin proxyAdmin;
         IStableTokenV3 stableToken;
+        ISystemParams systemParams;
         address stabilityPoolImpl;
         address stableTokenV3Impl;
         address fpmm;
+        address systemParamsImpl;
     }
 
     struct DeploymentConfig {
@@ -128,13 +122,6 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         address referenceRateFeedID;
         string stableTokenName;
         string stableTokenSymbol;
-        // Parameters for the TroveManager
-        uint256 CCR;
-        uint256 MCR;
-        uint256 SCR;
-        uint256 BCR;
-        uint256 LIQUIDATION_PENALTY_SP;
-        uint256 LIQUIDATION_PENALTY_REDISTRIBUTION;
     }
 
     DeploymentConfig internal CONFIG = DeploymentConfig({
@@ -144,14 +131,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         fpmmImplementation: 0x0292efcB331C6603eaa29D570d12eB336D6c01d6,
         referenceRateFeedID: 0x206B25Ea01E188Ee243131aFdE526bA6E131a016,
         stableTokenName: "EUR.m Test",
-        stableTokenSymbol: "EUR.m",
-        // TODO: reconsider these values
-        CCR: 150e16,
-        MCR: 110e16,
-        SCR: 110e16,
-        BCR: 40e16,
-        LIQUIDATION_PENALTY_SP: 5e16,
-        LIQUIDATION_PENALTY_REDISTRIBUTION: 10e16
+        stableTokenSymbol: "EUR.m"
     });
 
     function run() external {
@@ -179,32 +159,20 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         return abi.encodePacked(_creationCode, abi.encode(_addressesRegistry));
     }
 
+    function getBytecode(bytes memory _creationCode, address _addressesRegistry, address _systemParams) public pure returns (bytes memory) {
+        return abi.encodePacked(_creationCode, abi.encode(_addressesRegistry, _systemParams));
+    }
+
     function _deployAndConnectContracts() internal returns (DeploymentResult memory r) {
         _deployProxyInfrastructure(r);
         _deployStableToken(r);
         _deployFPMM(r);
+        _deploySystemParams(r);
 
-        TroveManagerParams memory troveManagerParams = TroveManagerParams({
-            CCR: CONFIG.CCR,
-            MCR: CONFIG.MCR,
-            SCR: CONFIG.SCR,
-            BCR: CONFIG.BCR,
-            LIQUIDATION_PENALTY_SP: CONFIG.LIQUIDATION_PENALTY_SP,
-            LIQUIDATION_PENALTY_REDISTRIBUTION: CONFIG.LIQUIDATION_PENALTY_REDISTRIBUTION
-        });
-
-        IAddressesRegistry addressesRegistry = new AddressesRegistry(
-            deployer,
-            troveManagerParams.CCR,
-            troveManagerParams.MCR,
-            troveManagerParams.BCR,
-            troveManagerParams.SCR,
-            troveManagerParams.LIQUIDATION_PENALTY_SP,
-            troveManagerParams.LIQUIDATION_PENALTY_REDISTRIBUTION
-        );
+        IAddressesRegistry addressesRegistry = new AddressesRegistry(deployer);
 
         address troveManagerAddress = vm.computeCreate2Address(
-            SALT, keccak256(getBytecode(type(TroveManager).creationCode, address(addressesRegistry)))
+            SALT, keccak256(getBytecode(type(TroveManager).creationCode, address(addressesRegistry), address(r.systemParams)))
         );
 
         IERC20Metadata collToken = IERC20Metadata(CONFIG.USDm_ALFAJORES_ADDRESS);
@@ -215,8 +183,8 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         ITroveManager[] memory troveManagers = new ITroveManager[](1);
         troveManagers[0] = ITroveManager(troveManagerAddress);
 
-        r.collateralRegistry = new CollateralRegistry(IBoldToken(address(r.stableToken)), collaterals, troveManagers);
-        r.hintHelpers = new HintHelpers(r.collateralRegistry);
+        r.collateralRegistry = new CollateralRegistry(IBoldToken(address(r.stableToken)), collaterals, troveManagers, r.systemParams);
+        r.hintHelpers = new HintHelpers(r.collateralRegistry, r.systemParams);
         r.multiTroveGetter = new MultiTroveGetter(r.collateralRegistry);
 
         IPriceFeed priceFeed = new PriceFeedTestnet();
@@ -229,6 +197,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         r.proxyAdmin = ProxyAdmin(CONFIG.proxyAdmin);
         r.stableTokenV3Impl = address(new StableTokenV3{salt: SALT}(true));
         r.stabilityPoolImpl = address(new StabilityPool{salt: SALT}(true));
+        r.systemParamsImpl = address(new SystemParams{salt: SALT}(true));
 
         assert(
             address(r.stableTokenV3Impl)
@@ -242,6 +211,13 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
                     SALT, keccak256(bytes.concat(type(StabilityPool).creationCode, abi.encode(true)))
                 )
         );
+
+        assert(
+            address(r.systemParamsImpl)
+                == vm.computeCreate2Address(
+                    SALT, keccak256(bytes.concat(type(SystemParams).creationCode, abi.encode(true)))
+                )
+        );
     }
 
     function _deployStableToken(DeploymentResult memory r) internal {
@@ -253,6 +229,12 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
     function _deployFPMM(DeploymentResult memory r) internal {
         r.fpmm = IFPMMFactory(CONFIG.fpmmFactory).deployFPMM(
             CONFIG.fpmmImplementation, address(r.stableToken), CONFIG.USDm_ALFAJORES_ADDRESS, CONFIG.referenceRateFeedID
+        );
+    }
+
+    function _deploySystemParams(DeploymentResult memory r) internal {
+        r.systemParams = ISystemParams(
+            address(new TransparentUpgradeableProxy(address(r.systemParamsImpl), address(r.proxyAdmin), ""))
         );
     }
 
@@ -302,7 +284,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         // Deploy core protocol contracts
         _deployProtocolContracts(contracts, addresses);
 
-        IStabilityPool(stabilityPool).initialize(contracts.addressesRegistry);
+        IStabilityPool(stabilityPool).initialize(contracts.addressesRegistry, contracts.systemParams);
 
         address[] memory minters = new address[](2);
         minters[0] = address(contracts.borrowerOperations);
@@ -359,10 +341,10 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
     function _deployProtocolContracts(LiquityContracts memory contracts, LiquityContractAddresses memory addresses)
         internal
     {
-        contracts.borrowerOperations = new BorrowerOperations{salt: SALT}(contracts.addressesRegistry);
-        contracts.troveManager = new TroveManager{salt: SALT}(contracts.addressesRegistry);
+        contracts.borrowerOperations = new BorrowerOperations{salt: SALT}(contracts.addressesRegistry, contracts.systemParams);
+        contracts.troveManager = new TroveManager{salt: SALT}(contracts.addressesRegistry, contracts.systemParams);
         contracts.troveNFT = new TroveNFT{salt: SALT}(contracts.addressesRegistry);
-        contracts.activePool = new ActivePool{salt: SALT}(contracts.addressesRegistry);
+        contracts.activePool = new ActivePool{salt: SALT}(contracts.addressesRegistry, contracts.systemParams);
         contracts.defaultPool = new DefaultPool{salt: SALT}(contracts.addressesRegistry);
         contracts.gasPool = new GasPool{salt: SALT}(contracts.addressesRegistry);
         contracts.collSurplusPool = new CollSurplusPool{salt: SALT}(contracts.addressesRegistry);
@@ -386,6 +368,16 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         return vm.computeCreate2Address(SALT, keccak256(getBytecode(creationCode, _addressesRegistry)));
     }
 
+    function _computeCreate2AddressWithPar(bytes memory creationCode, address _addressesRegistry)
+        internal
+        view
+        returns (address)
+    {
+        return vm.computeCreate2Address(SALT, keccak256(getBytecode(creationCode, _addressesRegistry)));
+    }
+
+
+
     function _getBranchContractsJson(LiquityContracts memory c) internal view returns (string memory) {
         return string.concat(
             "{",
@@ -399,7 +391,8 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
                     string.concat('"borrowerOperations":"', address(c.borrowerOperations).toHexString(), '",'),
                     string.concat('"collSurplusPool":"', address(c.collSurplusPool).toHexString(), '",'),
                     string.concat('"defaultPool":"', address(c.defaultPool).toHexString(), '",'),
-                    string.concat('"sortedTroves":"', address(c.sortedTroves).toHexString(), '",')
+                    string.concat('"sortedTroves":"', address(c.sortedTroves).toHexString(), '",'),
+                    string.concat('"systemParams":"', address(c.systemParams).toHexString(), '",')
                 ),
                 string.concat(
                     string.concat('"stabilityPool":"', address(c.stabilityPool).toHexString(), '",'),
@@ -415,17 +408,17 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         );
     }
 
-    function _getDeploymentConstants() internal pure returns (string memory) {
+    function _getDeploymentConstants(ISystemParams params) internal view returns (string memory) {
         return string.concat(
             "{",
             string.concat(
-                string.concat('"ETH_GAS_COMPENSATION":"', ETH_GAS_COMPENSATION.toString(), '",'),
-                string.concat('"INTEREST_RATE_ADJ_COOLDOWN":"', INTEREST_RATE_ADJ_COOLDOWN.toString(), '",'),
-                string.concat('"MAX_ANNUAL_INTEREST_RATE":"', MAX_ANNUAL_INTEREST_RATE.toString(), '",'),
-                string.concat('"MIN_ANNUAL_INTEREST_RATE":"', MIN_ANNUAL_INTEREST_RATE.toString(), '",'),
-                string.concat('"MIN_DEBT":"', MIN_DEBT.toString(), '",'),
-                string.concat('"SP_YIELD_SPLIT":"', SP_YIELD_SPLIT.toString(), '",'),
-                string.concat('"UPFRONT_INTEREST_PERIOD":"', UPFRONT_INTEREST_PERIOD.toString(), '"') // no comma
+                string.concat('"ETH_GAS_COMPENSATION":"', params.ETH_GAS_COMPENSATION().toString(), '",'),
+                string.concat('"INTEREST_RATE_ADJ_COOLDOWN":"', params.INTEREST_RATE_ADJ_COOLDOWN().toString(), '",'),
+                string.concat('"MAX_ANNUAL_INTEREST_RATE":"', params.MAX_ANNUAL_INTEREST_RATE().toString(), '",'),
+                string.concat('"MIN_ANNUAL_INTEREST_RATE":"', params.MIN_ANNUAL_INTEREST_RATE().toString(), '",'),
+                string.concat('"MIN_DEBT":"', params.MIN_DEBT().toString(), '",'),
+                string.concat('"SP_YIELD_SPLIT":"', params.SP_YIELD_SPLIT().toString(), '",'),
+                string.concat('"UPFRONT_INTEREST_PERIOD":"', params.UPFRONT_INTEREST_PERIOD().toString(), '"') // no comma
             ),
             "}"
         );
@@ -438,7 +431,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
 
         return string.concat(
             "{",
-            string.concat('"constants":', _getDeploymentConstants(), ","),
+            string.concat('"constants":', _getDeploymentConstants(deployed.contracts.systemParams), ","),
             string.concat('"collateralRegistry":"', address(deployed.collateralRegistry).toHexString(), '",'),
             string.concat('"boldToken":"', address(deployed.stableToken).toHexString(), '",'),
             string.concat('"hintHelpers":"', address(deployed.hintHelpers).toHexString(), '",'),

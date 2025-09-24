@@ -40,6 +40,13 @@ contract ShutdownTest is DevTestSetup {
         for (uint256 c = 0; c < NUM_COLLATERALS; c++) {
             contractsArray.push(_contractsArray[c]);
         }
+        
+        // Initialize SystemParams-based variables
+        systemParams = contractsArray[0].systemParams;
+        UPFRONT_INTEREST_PERIOD = systemParams.UPFRONT_INTEREST_PERIOD();
+        URGENT_REDEMPTION_BONUS = systemParams.URGENT_REDEMPTION_BONUS();
+        MIN_INTEREST_RATE_CHANGE_PERIOD = systemParams.MIN_INTEREST_RATE_CHANGE_PERIOD();
+        SP_YIELD_SPLIT = systemParams.SP_YIELD_SPLIT();
         // Set price feeds
         contractsArray[0].priceFeed.setPrice(2000e18);
         contractsArray[1].priceFeed.setPrice(200e18);
@@ -74,8 +81,12 @@ contract ShutdownTest is DevTestSetup {
         borrowerOperations = contractsArray[0].borrowerOperations;
         troveManager = contractsArray[0].troveManager;
         priceFeed = contractsArray[0].priceFeed;
+        systemParams = contractsArray[0].systemParams;
         MCR = troveManager.get_MCR();
         SCR = troveManager.get_SCR();
+        UPFRONT_INTEREST_PERIOD = systemParams.UPFRONT_INTEREST_PERIOD();
+        MIN_INTEREST_RATE_CHANGE_PERIOD = systemParams.MIN_INTEREST_RATE_CHANGE_PERIOD();
+        URGENT_REDEMPTION_BONUS = systemParams.URGENT_REDEMPTION_BONUS();
     }
 
     function openMulticollateralTroveNoHints100pctWithIndex(
