@@ -118,6 +118,8 @@ import "./Dependencies/LiquityBaseInit.sol";
 contract StabilityPool is Initializable, LiquityBaseInit, IStabilityPool, IStabilityPoolEvents {
     using SafeERC20 for IERC20;
 
+    uint256 public constant LOCKUP_PERIOD = 3 days;
+    uint256 public constant UNLOCK_DURATION = 2 days;
     string public constant NAME = "StabilityPool";
 
     IERC20 public collToken;
@@ -152,6 +154,7 @@ contract StabilityPool is Initializable, LiquityBaseInit, IStabilityPool, IStabi
     mapping(address => Deposit) public deposits; // depositor address -> Deposit struct
     mapping(address => Snapshots) public depositSnapshots; // depositor address -> snapshots struct
     mapping(address => uint256) public stashedColl;
+    mapping(address => uint256) public withdrawalRequests; // depositor address -> last withdrawal request
 
     /*  Product 'P': Running product by which to multiply an initial deposit, in order to find the current compounded deposit,
     * after a series of liquidations have occurred, each of which cancel some Bold debt with the deposit.
@@ -296,24 +299,38 @@ contract StabilityPool is Initializable, LiquityBaseInit, IStabilityPool, IStabi
         return (yieldToKeep, yieldToSend);
     }
 
+    function requestWithdrawalFromSP() external {
+        withdrawalRequests[msg.sender] = block.timestamp;
+        emit WithdrawalRequested(msg.sender, block.timestamp);
+    }
+
     /*  withdrawFromSP():
     * - Calculates depositor's Coll gain
     * - Calculates the compounded deposit
-    * - Sends the requested BOLD withdrawal to depositor
+    * - Sends the requested BOLD withdrawal to depositor if it was requested at least LOCKUP_PERIOD seconds ago
+    *   but less than LOCKUP_PERIOD + UNLOCK_DURATION seconds ago
     * - (If _amount > userDeposit, the user withdraws all of their compounded deposit)
     * - Decreases deposit by withdrawn amount and takes new snapshots of accumulators P and S
     */
     function withdrawFromSP(uint256 _amount, bool _doClaim) external override {
         uint256 initialDeposit = deposits[msg.sender].initialValue;
         _requireUserHasDeposit(initialDeposit);
-
+        
         activePool.mintAggInterest();
 
+        bool isLockedUp;
+        uint256 boldToWithdraw;
+        uint256 compoundedBoldDeposit = getCompoundedBoldDeposit(msg.sender);
+        {
+          uint256 withdrawalRequest = withdrawalRequests[msg.sender];
+          isLockedUp = withdrawalRequest + LOCKUP_PERIOD > block.timestamp || withdrawalRequest + LOCKUP_PERIOD + UNLOCK_DURATION < block.timestamp;
+          uint256 effectiveAmount = isLockedUp ? 0 : _amount;
+          boldToWithdraw = LiquityMath._min(effectiveAmount, compoundedBoldDeposit);
+        }
         uint256 currentCollGain = getDepositorCollGain(msg.sender);
         uint256 currentYieldGain = getDepositorYieldGain(msg.sender);
-        uint256 compoundedBoldDeposit = getCompoundedBoldDeposit(msg.sender);
-        uint256 boldToWithdraw = LiquityMath._min(_amount, compoundedBoldDeposit);
-        (uint256 keptYieldGain, uint256 yieldGainToSend) = _getYieldToKeepOrSend(currentYieldGain, _doClaim);
+        
+        (uint256 keptYieldGain, uint256 yieldGainToSend) = _getYieldToKeepOrSend(currentYieldGain, _doClaim && !isLockedUp);
         uint256 newDeposit = compoundedBoldDeposit - boldToWithdraw + keptYieldGain;
         (uint256 newStashedColl, uint256 collToSend) =
             _getNewStashedCollAndCollToSend(msg.sender, currentCollGain, _doClaim);

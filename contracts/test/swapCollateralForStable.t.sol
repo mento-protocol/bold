@@ -128,6 +128,7 @@ contract SwapCollateralForStableTest is DevTestSetup {
         stabilityPool.swapCollateralForStable(collSwapAmount, stableSwapAmount);
         vm.stopPrank();
 
+        requestWithdrawal(B, true);
         // Check SP Bold has decreased by swap amount
         uint256 finalSPBoldBalance = stabilityPool.getTotalBoldDeposits();
         assertEq(
@@ -240,6 +241,9 @@ contract SwapCollateralForStableTest is DevTestSetup {
         assertEq(collToken.balanceOf(liquidityStrategy), initialValues.lsCollBalance - collSwapAmount);
         
         // Withdraw from all depositors to check they receive proportional collateral gains
+        requestWithdrawal(A, false);
+        requestWithdrawal(B, false);
+        requestWithdrawal(C, true); // Waits for A, B and C
         vm.startPrank(A);
         stabilityPool.withdrawFromSP(depositA, true);
         vm.stopPrank();
@@ -344,6 +348,7 @@ contract SwapCollateralForStableTest is DevTestSetup {
         
         uint256 initialCColl = collToken.balanceOf(C);
 
+        requestWithdrawal(C, true);
         uint256 compoundedBoldDeposit = stabilityPool.getCompoundedBoldDeposit(C);
         // C should be able to withdraw and receive both swap and liquidation gains
         vm.startPrank(C);

@@ -339,6 +339,15 @@ contract BaseTest is TestAccounts, Logging, TroveId {
         vm.stopPrank();
     }
 
+    function requestWithdrawal(address _account, bool _wait) public {
+        vm.startPrank(_account);
+        stabilityPool.requestWithdrawalFromSP();
+        vm.stopPrank();
+        if (_wait) {
+            vm.warp(block.timestamp + stabilityPool.LOCKUP_PERIOD());
+        }
+    }
+
     function makeSPWithdrawalAndClaim(address _account, uint256 _amount) public {
         vm.startPrank(_account);
         stabilityPool.withdrawFromSP(_amount, true);

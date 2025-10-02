@@ -2174,6 +2174,7 @@ contract InterestRateAggregate is DevTestSetup {
         _setupForSPDepositAdjustmentsWithoutOwedYieldRewards();
 
         // A withdraws depsoiit and stashes gain
+        requestWithdrawal(A, true);
         uint256 deposit_A = stabilityPool.getCompoundedBoldDeposit(A);
         makeSPWithdrawalNoClaim(A, deposit_A);
 
@@ -2197,6 +2198,7 @@ contract InterestRateAggregate is DevTestSetup {
         _setupForSPDepositAdjustmentsWithoutOwedYieldRewards();
 
         // A withdraws depsoiit and stashes gain
+        requestWithdrawal(A, true);
         uint256 deposit_A = stabilityPool.getCompoundedBoldDeposit(A);
         makeSPWithdrawalNoClaim(A, deposit_A);
 
@@ -2218,6 +2220,7 @@ contract InterestRateAggregate is DevTestSetup {
         _setupForSPDepositAdjustmentsWithoutOwedYieldRewards();
 
         // A withdraws deposit and stashes gain
+        requestWithdrawal(A, true);
         uint256 deposit_A = stabilityPool.getCompoundedBoldDeposit(A);
         makeSPWithdrawalNoClaim(A, deposit_A);
 
@@ -2242,6 +2245,7 @@ contract InterestRateAggregate is DevTestSetup {
         troveIDs = _setupForSPDepositAdjustmentsWithoutOwedYieldRewards();
 
         // A withdraws depsoiit and stashes gain
+        requestWithdrawal(A, true);
         uint256 deposit_A = stabilityPool.getCompoundedBoldDeposit(A);
         makeSPWithdrawalNoClaim(A, deposit_A);
 

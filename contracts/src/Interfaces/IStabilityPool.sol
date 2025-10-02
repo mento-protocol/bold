@@ -35,6 +35,9 @@ interface IStabilityPool is ILiquityBase, IBoldRewardsReceiver {
     function boldToken() external view returns (IBoldToken);
     function troveManager() external view returns (ITroveManager);
 
+    function LOCKUP_PERIOD() external view returns (uint256);
+    function UNLOCK_DURATION() external view returns (uint256);
+
     /*  provideToSP():
     * - Calculates depositor's Coll gain
     * - Calculates the compounded deposit
@@ -42,6 +45,8 @@ interface IStabilityPool is ILiquityBase, IBoldRewardsReceiver {
     * - Sends depositor's accumulated Coll gains to depositor
     */
     function provideToSP(uint256 _amount, bool _doClaim) external;
+
+    function requestWithdrawalFromSP() external;
 
     /*  withdrawFromSP():
     * - Calculates depositor's Coll gain
