@@ -897,6 +897,8 @@ contract StabilityPoolEventsTest is EventsTest, IStabilityPoolEvents {
         // B deposits so A can fully claim
         makeSPDepositNoClaim(B, 1e18);
 
+        requestWithdrawal(A, true);
+
         makeSPWithdrawalNoClaim(A, deposit.recordedBold - deposit.pendingBoldLoss); // can't withdraw pending yield
         makeSPWithdrawalNoClaim(A, deposit.pendingBoldYieldGain); // now we can withdraw previously pending yield
 

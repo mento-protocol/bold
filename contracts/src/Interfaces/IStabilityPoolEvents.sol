@@ -6,7 +6,8 @@ interface IStabilityPoolEvents {
     enum Operation {
         provideToSP,
         withdrawFromSP,
-        claimAllCollGains
+        claimAllCollGains,
+        t // TODO: name 
     }
 
     event StabilityPoolCollBalanceUpdated(uint256 _newBalance);
@@ -36,5 +37,10 @@ interface IStabilityPoolEvents {
         uint256 _yieldGainClaimed,
         uint256 _ethGainSinceLastOperation,
         uint256 _ethGainClaimed
+    );
+
+    event WithdrawalRequested(
+        address indexed _depositor,
+        uint256 _timestamp
     );
 }

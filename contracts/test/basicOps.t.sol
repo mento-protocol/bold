@@ -200,6 +200,7 @@ contract BasicOps is DevTestSetup {
         assertEq(boldToken.balanceOf(A), 1900e18);
         assertApproximatelyEqual(stabilityPool.getCompoundedBoldDeposit(A), 100e18, 1e2);
 
+        requestWithdrawal(A, true);
         // A withdraws their full SP deposit less 1e18
         makeSPWithdrawalAndClaim(A, 99e18);
 
