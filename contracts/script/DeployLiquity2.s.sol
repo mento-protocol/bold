@@ -353,7 +353,8 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             boldToken: IBoldToken(address(r.stableToken)),
             gasToken: IERC20Metadata(CONFIG.USDm_ALFAJORES_ADDRESS),
             // TODO: set liquidity strategy
-            liquidityStrategy: address(0)
+            liquidityStrategy: address(0),
+            watchdogAddress: address(0)
         });
         contracts.addressesRegistry.setAddresses(addressVars);
     }

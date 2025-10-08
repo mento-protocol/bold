@@ -26,6 +26,7 @@ contract AddressesRegistry is Ownable, IAddressesRegistry {
     IBoldToken public boldToken;
     IERC20Metadata public gasToken;
     address public liquidityStrategy;
+    address public watchdogAddress;
 
     // Critical system collateral ratio. If the system's total collateral ratio (TCR) falls below the CCR, some borrowing operation restrictions are applied
     uint256 public immutable CCR;
@@ -69,6 +70,7 @@ contract AddressesRegistry is Ownable, IAddressesRegistry {
     event BoldTokenAddressChanged(address _boldTokenAddress);
     event GasTokenAddressChanged(address _gasTokenAddress);
     event LiquidityStrategyAddressChanged(address _liquidityStrategyAddress);
+    event WatchdogAddressChanged(address _watchdogAddress);
 
     constructor(
         address _owner,
@@ -115,6 +117,7 @@ contract AddressesRegistry is Ownable, IAddressesRegistry {
         boldToken = _vars.boldToken;
         gasToken = _vars.gasToken;
         liquidityStrategy = _vars.liquidityStrategy;
+        watchdogAddress = _vars.watchdogAddress;
 
         emit CollTokenAddressChanged(address(_vars.collToken));
         emit BorrowerOperationsAddressChanged(address(_vars.borrowerOperations));
@@ -135,6 +138,7 @@ contract AddressesRegistry is Ownable, IAddressesRegistry {
         emit BoldTokenAddressChanged(address(_vars.boldToken));
         emit GasTokenAddressChanged(address(_vars.gasToken));
         emit LiquidityStrategyAddressChanged(address(_vars.liquidityStrategy));
+        emit WatchdogAddressChanged(address(_vars.watchdogAddress));
 
         _renounceOwnership();
     }
