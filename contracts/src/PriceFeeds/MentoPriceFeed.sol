@@ -29,7 +29,6 @@ contract MentoPriceFeed is IPriceFeed {
             return (lastGoodPrice, false);
         }
 
-        // TOOD: Do we want to check the breaker box here?
         (uint256 numerator, ) = oracleAdapter.getFXRateIfValid(rateFeedID);
 
         lastGoodPrice = numerator;
