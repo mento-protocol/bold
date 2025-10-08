@@ -3,6 +3,7 @@
 pragma solidity 0.8.24;
 
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import { OwnableUpgradeable } from "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
 
 import "./Interfaces/IBorrowerOperations.sol";
 import "./Interfaces/IAddressesRegistry.sol";
@@ -11,8 +12,9 @@ import "./Interfaces/IBoldToken.sol";
 import "./Interfaces/ICollSurplusPool.sol";
 import "./Interfaces/ISortedTroves.sol";
 import "./Interfaces/ISystemParams.sol";
-import "./Dependencies/LiquityBase.sol";
-import "./Dependencies/AddRemoveManagers.sol";
+import { LiquityBaseInit, LiquityMath } from "./Dependencies/LiquityBaseInit.sol";
+import { AddRemoveManagersInit } from "./Dependencies/AddRemoveManagersInit.sol";
+import "./Dependencies/Constants.sol";
 import "./Types/LatestTroveData.sol";
 import "./Types/LatestBatchData.sol";
 
@@ -23,15 +25,16 @@ import "./Types/LatestBatchData.sol";
  * - SCR: Only used in shutdown() function
  */
 contract BorrowerOperations is
-    LiquityBase,
-    AddRemoveManagers,
+    LiquityBaseInit,
+    AddRemoveManagersInit,
+    OwnableUpgradeable,
     IBorrowerOperations
 {
     using SafeERC20 for IERC20;
 
     // --- Connected contract declarations ---
 
-    IERC20 internal immutable collToken;
+    IERC20 internal collToken;
     ITroveManager internal troveManager;
     address internal gasPoolAddress;
     ICollSurplusPool internal collSurplusPool;
@@ -39,23 +42,23 @@ contract BorrowerOperations is
     // A doubly linked list of Troves, sorted by their collateral ratios
     ISortedTroves internal sortedTroves;
     // Wrapped ETH for liquidation reserve (gas compensation)
-    IERC20Metadata internal immutable gasToken;
-    ISystemParams internal immutable systemParams;
+    IERC20Metadata internal gasToken;
+    ISystemParams internal systemParams;
 
     // Critical system collateral ratio. If the system's total collateral ratio (TCR) falls below the CCR, some borrowing operation restrictions are applied
-    uint256 public immutable CCR;
+    uint256 public CCR;
 
     bool public hasBeenShutDown;
 
     // Minimum collateral ratio for individual troves
-    uint256 public immutable MCR;
+    uint256 public MCR;
 
     // Extra buffer of collateral ratio to join a batch or adjust a trove inside a batch (on top of MCR)
-    uint256 public immutable BCR;
+    uint256 public BCR;
 
-    uint256 public immutable ETH_GAS_COMPENSATION;
-    uint256 public immutable MIN_DEBT;
-    uint256 public immutable MIN_ANNUAL_INTEREST_RATE;
+    uint256 public ETH_GAS_COMPENSATION;
+    uint256 public MIN_DEBT;
+    uint256 public MIN_ANNUAL_INTEREST_RATE;
 
     /*
      * Mapping from TroveId to individual delegate for interest rate setting.
@@ -178,10 +181,21 @@ contract BorrowerOperations is
 
     event ShutDown(uint256 _tcr);
 
-    constructor(
+    constructor(bool disableInitializers) {
+      if (disableInitializers) {
+        _disableInitializers();
+      }
+    }
+
+    function initialize(
         IAddressesRegistry _addressesRegistry,
-        ISystemParams _systemParams
-    ) AddRemoveManagers(_addressesRegistry) LiquityBase(_addressesRegistry) {
+        ISystemParams _systemParams,
+        address _initialOwner
+    ) public initializer {
+        __AddRemoveManagers_init(_addressesRegistry);
+        __LiquityBase_init(_addressesRegistry);
+        __Ownable_init();
+        _transferOwnership(_initialOwner);
         // This makes impossible to open a trove with zero withdrawn Bold
         assert(_systemParams.MIN_DEBT() > 0);
 

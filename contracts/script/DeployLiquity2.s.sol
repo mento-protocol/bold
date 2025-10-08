@@ -386,8 +386,10 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
     function _deployProtocolContracts(LiquityContracts memory contracts, LiquityContractAddresses memory addresses)
         internal
     {
+        // TODO: Deploy proxy then initialize
         contracts.borrowerOperations =
-            new BorrowerOperations{salt: SALT}(contracts.addressesRegistry, contracts.systemParams);
+            new BorrowerOperations{salt: SALT}(false);
+        contracts.borrowerOperations.initialize(contracts.addressesRegistry, contracts.systemParams, msg.sender);
         contracts.troveManager = new TroveManager{salt: SALT}(contracts.addressesRegistry, contracts.systemParams);
         contracts.troveNFT = new TroveNFT{salt: SALT}(contracts.addressesRegistry);
         contracts.activePool = new ActivePool{salt: SALT}(contracts.addressesRegistry, contracts.systemParams);

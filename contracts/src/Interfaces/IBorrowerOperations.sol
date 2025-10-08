@@ -4,6 +4,8 @@ pragma solidity ^0.8.0;
 
 import "./ILiquityBase.sol";
 import "./IAddRemoveManagers.sol";
+import "./IAddressesRegistry.sol";
+import "./ISystemParams.sol";
 import "./IBoldToken.sol";
 import "./IPriceFeed.sol";
 import "./ISortedTroves.sol";
@@ -14,6 +16,12 @@ import "./IWETH.sol";
 interface IBorrowerOperations is ILiquityBase, IAddRemoveManagers {
     function CCR() external view returns (uint256);
     function MCR() external view returns (uint256);
+
+    function initialize(
+        IAddressesRegistry _addressesRegistry,
+        ISystemParams _systemParams,
+        address _initialOwner
+    ) external;
 
     function openTrove(
         address _owner,
