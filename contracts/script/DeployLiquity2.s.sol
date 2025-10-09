@@ -354,6 +354,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             gasToken: IERC20Metadata(CONFIG.USDm_ALFAJORES_ADDRESS),
             // TODO: set liquidity strategy
             liquidityStrategy: address(0),
+            // TODO: set watchdog multisig address
             watchdogAddress: address(0)
         });
         contracts.addressesRegistry.setAddresses(addressVars);

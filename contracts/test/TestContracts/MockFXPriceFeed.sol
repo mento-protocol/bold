@@ -5,8 +5,8 @@ pragma solidity 0.8.24;
 import "./Interfaces/IMockFXPriceFeed.sol";
 
 /*
-* PriceFeed placeholder for testnet and development. The price is simply set manually and saved in a state 
-* variable. The contract does not connect to a live Chainlink price feed. 
+* Mock FXPriceFeed contract for testing purposes.
+* The price is simply set manually and saved in a state variable.
 */
 contract MockFXPriceFeed is IMockFXPriceFeed {
 
