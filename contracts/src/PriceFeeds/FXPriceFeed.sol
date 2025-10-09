@@ -1,13 +1,17 @@
+// SPDX-License-Identifier: MIT
+
 pragma solidity 0.8.24;
 
 import "../Interfaces/IPriceFeed.sol";
 import "../BorrowerOperations.sol";
 
+import { OwnableUpgradeable } from "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
+
 interface IOracleAdapter {
     function getFXRateIfValid(address rateFeedID) external view returns (uint256 numerator, uint256 denominator);
 }
 
-contract FXPriceFeed is IPriceFeed {
+contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
 
     IOracleAdapter public oracleAdapter;
     address public rateFeedID;
@@ -17,10 +21,28 @@ contract FXPriceFeed is IPriceFeed {
     uint256 public lastGoodPrice;
     bool public isShutdown;
 
-    constructor(address _oracleAdapterAddress, address _rateFeedID, address _borrowerOperationsAddress, address _watchdogAddress) {
+    constructor(bool disableInitializers) {
+      if (disableInitializers) {
+        _disableInitializers();
+      }
+    }
+
+    function initialize(
+        address _oracleAdapterAddress,
+        address _rateFeedID,
+        address _borrowerOperationsAddress,
+        address _watchdogAddress,
+        address _initialOwner
+    ) external initializer {
         oracleAdapter = IOracleAdapter(_oracleAdapterAddress);
         rateFeedID = _rateFeedID;
         borrowerOperations = IBorrowerOperations(_borrowerOperationsAddress);
+        watchdogAddress = _watchdogAddress;
+
+        _transferOwnership(_initialOwner);
+    }
+
+    function setWatchdogAddress(address _watchdogAddress) external onlyOwner {
         watchdogAddress = _watchdogAddress;
     }
 
