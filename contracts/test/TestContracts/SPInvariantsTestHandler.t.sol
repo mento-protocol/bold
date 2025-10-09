@@ -8,7 +8,7 @@ import {IStabilityPool} from "src/Interfaces/IStabilityPool.sol";
 import {ITroveManager} from "src/Interfaces/ITroveManager.sol";
 import {ICollSurplusPool} from "src/Interfaces/ICollSurplusPool.sol";
 import {HintHelpers} from "src/HintHelpers.sol";
-import {IPriceFeedTestnet} from "./Interfaces/IPriceFeedTestnet.sol";
+import {IMockFXPriceFeed} from "./Interfaces/IMockFXPriceFeed.sol";
 import {ITroveManagerTester} from "./Interfaces/ITroveManagerTester.sol";
 import {LiquityMath} from "src/Dependencies/LiquityMath.sol";
 import {mulDivCeil} from "../Utils/Math.sol";
@@ -44,7 +44,7 @@ contract SPInvariantsTestHandler is BaseHandler, TroveId {
         IBoldToken boldToken;
         IBorrowerOperations borrowerOperations;
         IERC20 collateralToken;
-        IPriceFeedTestnet priceFeed;
+        IMockFXPriceFeed priceFeed;
         IStabilityPool stabilityPool;
         ITroveManagerTester troveManager;
         ICollSurplusPool collSurplusPool;
@@ -53,7 +53,7 @@ contract SPInvariantsTestHandler is BaseHandler, TroveId {
     IBoldToken immutable boldToken;
     IBorrowerOperations immutable borrowerOperations;
     IERC20 collateralToken;
-    IPriceFeedTestnet immutable priceFeed;
+    IMockFXPriceFeed immutable priceFeed;
     IStabilityPool immutable stabilityPool;
     ITroveManagerTester immutable troveManager;
     ICollSurplusPool immutable collSurplusPool;

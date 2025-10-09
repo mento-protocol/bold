@@ -20,7 +20,7 @@ import "src/TroveNFT.sol";
 import "src/NFTMetadata/MetadataNFT.sol";
 import "src/CollateralRegistry.sol";
 import "./MockInterestRouter.sol";
-import "./PriceFeedTestnet.sol";
+import "./MockFXPriceFeed.sol";
 import "./MetadataDeployment.sol";
 
 import {WETHTester} from "./WETHTester.sol";
@@ -56,7 +56,7 @@ contract TestDeployer is MetadataDeployment {
         IStabilityPool stabilityPool;
         ITroveManagerTester troveManager; // Tester
         ITroveNFT troveNFT;
-        IPriceFeedTestnet priceFeed; // Tester
+        IMockFXPriceFeed priceFeed; // Tester
         IInterestRouter interestRouter;
         IERC20Metadata collToken;
         LiquityContractsDevPools pools;
@@ -353,7 +353,7 @@ contract TestDeployer is MetadataDeployment {
 
         // Deploy all contracts, using testers for TM and PriceFeed
         contracts.addressesRegistry = _addressesRegistry;
-        contracts.priceFeed = new PriceFeedTestnet();
+        contracts.priceFeed = new MockFXPriceFeed();
         contracts.interestRouter = new MockInterestRouter();
 
         // Deploy Metadata

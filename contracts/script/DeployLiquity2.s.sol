@@ -33,7 +33,7 @@ import "src/StabilityPool.sol";
 import "src/CollateralRegistry.sol";
 import "src/tokens/StableTokenV3.sol";
 import "src/Interfaces/IStableTokenV3.sol";
-import "test/TestContracts/PriceFeedTestnet.sol";
+import "test/TestContracts/MockFXPriceFeed.sol";
 import "test/TestContracts/MetadataDeployment.sol";
 import "test/Utils/Logging.sol";
 import "test/Utils/StringEquality.sol";
@@ -219,7 +219,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         r.hintHelpers = new HintHelpers(r.collateralRegistry);
         r.multiTroveGetter = new MultiTroveGetter(r.collateralRegistry);
 
-        IPriceFeed priceFeed = new PriceFeedTestnet();
+        IPriceFeed priceFeed = new MockFXPriceFeed();
 
         r.contracts =
             _deployAndConnectCollateralContracts(collToken, priceFeed, addressesRegistry, troveManagerAddress, r);
