@@ -177,6 +177,10 @@ contract TestDeployer is MetadataDeployment {
         return abi.encodePacked(_creationCode, abi.encode(_disable));
     }
 
+    function getBytecode(bytes memory _creationCode, bool _disable, address _addressesRegistry) public pure returns (bytes memory) {
+        return abi.encodePacked(_creationCode, abi.encode(_disable, _addressesRegistry));
+    }
+
     function getAddress(address _deployer, bytes memory _bytecode, bytes32 _salt) public pure returns (address) {
         bytes32 hash = keccak256(abi.encodePacked(bytes1(0xff), _deployer, _salt, keccak256(_bytecode)));
 
@@ -452,7 +456,7 @@ contract TestDeployer is MetadataDeployment {
             address(this), getBytecode(type(GasPool).creationCode, address(contracts.addressesRegistry)), SALT
         );
         addresses.collSurplusPool = getAddress(
-            address(this), getBytecode(type(CollSurplusPool).creationCode, address(contracts.addressesRegistry)), SALT
+            address(this), getBytecode(type(CollSurplusPool).creationCode, bool(false), address(contracts.addressesRegistry)), SALT
         );
         addresses.sortedTroves = getAddress(
             address(this), getBytecode(type(SortedTroves).creationCode, address(contracts.addressesRegistry)), SALT
@@ -492,7 +496,7 @@ contract TestDeployer is MetadataDeployment {
         contracts.activePool = new ActivePool{salt: SALT}(contracts.addressesRegistry, _systemParams);
         contracts.pools.defaultPool = new DefaultPool{salt: SALT}(contracts.addressesRegistry);
         contracts.pools.gasPool = new GasPool{salt: SALT}(contracts.addressesRegistry);
-        contracts.pools.collSurplusPool = new CollSurplusPool{salt: SALT}(contracts.addressesRegistry);
+        contracts.pools.collSurplusPool = new CollSurplusPool{salt: SALT}(false, contracts.addressesRegistry);
         contracts.sortedTroves = new SortedTroves{salt: SALT}(contracts.addressesRegistry);
 
         assert(address(contracts.borrowerOperations) == addresses.borrowerOperations);
@@ -506,6 +510,7 @@ contract TestDeployer is MetadataDeployment {
         assert(address(contracts.sortedTroves) == addresses.sortedTroves);
 
         contracts.stabilityPool.initialize(contracts.addressesRegistry, _systemParams);
+        contracts.pools.collSurplusPool.initialize();
 
         // Connect contracts
         _boldToken.setBranchAddresses(
@@ -655,7 +660,7 @@ contract TestDeployer is MetadataDeployment {
             address(this), getBytecode(type(GasPool).creationCode, address(contracts.addressesRegistry)), SALT
         );
         addresses.collSurplusPool = getAddress(
-            address(this), getBytecode(type(CollSurplusPool).creationCode, address(contracts.addressesRegistry)), SALT
+            address(this), getBytecode(type(CollSurplusPool).creationCode, bool(false), address(contracts.addressesRegistry)), SALT
         );
         addresses.sortedTroves = getAddress(
             address(this), getBytecode(type(SortedTroves).creationCode, address(contracts.addressesRegistry)), SALT
@@ -698,7 +703,7 @@ contract TestDeployer is MetadataDeployment {
         contracts.activePool = new ActivePool{salt: SALT}(contracts.addressesRegistry, _systemParams);
         contracts.defaultPool = new DefaultPool{salt: SALT}(contracts.addressesRegistry);
         contracts.gasPool = new GasPool{salt: SALT}(contracts.addressesRegistry);
-        contracts.collSurplusPool = new CollSurplusPool{salt: SALT}(contracts.addressesRegistry);
+        contracts.collSurplusPool = new CollSurplusPool{salt: SALT}(false, contracts.addressesRegistry);
         contracts.sortedTroves = new SortedTroves{salt: SALT}(contracts.addressesRegistry);
 
         assert(address(contracts.borrowerOperations) == addresses.borrowerOperations);
@@ -712,6 +717,7 @@ contract TestDeployer is MetadataDeployment {
         assert(address(contracts.sortedTroves) == addresses.sortedTroves);
 
         contracts.stabilityPool.initialize(contracts.addressesRegistry, _systemParams);
+        contracts.collSurplusPool.initialize();
 
         // Connect contracts
         _params.boldToken.setBranchAddresses(

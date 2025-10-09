@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 
+import "./IAddressesRegistry.sol";
+
 pragma solidity ^0.8.0;
 
 interface ICollSurplusPool {
@@ -10,4 +12,6 @@ interface ICollSurplusPool {
     function accountSurplus(address _account, uint256 _amount) external;
 
     function claimColl(address _account) external;
+
+    function initialize() external;
 }
