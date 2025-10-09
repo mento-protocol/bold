@@ -46,20 +46,16 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
         watchdogAddress = _watchdogAddress;
     }
 
-    function fetchPrice() public returns (uint256, bool) {
+    function fetchPrice() public returns (uint256) {
         if (isShutdown) {
-            return (lastGoodPrice, false);
+            return lastGoodPrice;
         }
 
-        (uint256 numerator, ) = oracleAdapter.getFXRateIfValid(rateFeedID);
+        (uint256 price, ) = oracleAdapter.getFXRateIfValid(rateFeedID);
 
-        lastGoodPrice = numerator;
+        lastGoodPrice = price;
 
-        return (numerator, false);
-    }
-
-    function fetchRedemptionPrice() external returns (uint256, bool) {
-        return fetchPrice();
+        return price;
     }
 
     function shutdown() external {
