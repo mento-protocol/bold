@@ -9,38 +9,36 @@ import "./Interfaces/IMockFXPriceFeed.sol";
 * variable. The contract does not connect to a live Chainlink price feed. 
 */
 contract MockFXPriceFeed is IMockFXPriceFeed {
-    event LastGoodPriceUpdated(uint256 _lastGoodPrice);
 
     uint256 private _price = 200 * 1e18;
+    bool isShutdown = false;
 
-    // --- Functions ---
-
-    // View price getter for simplicity in tests
     function getPrice() external view override returns (uint256) {
         return _price;
     }
 
+    function setPrice(uint256 price) external {
+        _price = price;
+    }
+
     function lastGoodPrice() external view returns (uint256) {
+        revert("Not implemented");
         return _price;
     }
 
     function fetchPrice() external override returns (uint256, bool) {
-        // Fire an event just like the mainnet version would.
-        // This lets the subgraph rely on events to get the latest price even when developing locally.
-        emit LastGoodPriceUpdated(_price);
+        require(!isShutdown, "MockFXPriceFeed: shutdown");
+
         return (_price, false);
     }
 
     function fetchRedemptionPrice() external override returns (uint256, bool) {
-        // Fire an event just like the mainnet version would.
-        // This lets the subgraph rely on events to get the latest price even when developing locally.
-        emit LastGoodPriceUpdated(_price);
+        require(!isShutdown, "MockFXPriceFeed: shutdown");
+
         return (_price, false);
     }
 
-    // Manual external price setter.
-    function setPrice(uint256 price) external returns (bool) {
-        _price = price;
-        return true;
+    function shutdown() external {
+        isShutdown = true;
     }
 }

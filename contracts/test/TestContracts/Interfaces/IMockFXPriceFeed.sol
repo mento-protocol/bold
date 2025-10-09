@@ -5,6 +5,6 @@ pragma solidity 0.8.24;
 import "src/Interfaces/IPriceFeed.sol";
 
 interface IMockFXPriceFeed is IPriceFeed {
-    function setPrice(uint256 _price) external returns (bool);
+    function setPrice(uint256 _price) external;
     function getPrice() external view returns (uint256);
 }
