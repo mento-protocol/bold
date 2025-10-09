@@ -64,4 +64,5 @@ interface IAddressesRegistry {
     function watchdogAddress() external view returns (address);
 
     function setAddresses(AddressVars memory _vars) external;
+    function initialize(address _owner) external;
 }

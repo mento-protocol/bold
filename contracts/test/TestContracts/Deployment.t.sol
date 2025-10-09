@@ -339,10 +339,10 @@ contract TestDeployer is MetadataDeployment {
         internal
         returns (IAddressesRegistry, address)
     {
-        IAddressesRegistry addressesRegistry = new AddressesRegistry(address(this));
-        address troveManagerAddress = getAddress(
-            address(this), getBytecode(type(TroveManagerTester).creationCode, address(addressesRegistry), address(_systemParams)), SALT
-        );
+        IAddressesRegistry addressesRegistry = new AddressesRegistry(false);
+        addressesRegistry.initialize(address(this));
+
+        address troveManagerAddress = getAddress(address(this), getBytecode(type(TroveManagerTester).creationCode, address(addressesRegistry), address(_systemParams)), SALT);
 
         return (addressesRegistry, troveManagerAddress);
     }
@@ -602,9 +602,12 @@ contract TestDeployer is MetadataDeployment {
         internal
         returns (IAddressesRegistry, address)
     {
-        IAddressesRegistry addressesRegistry = new AddressesRegistry(address(this));
-        address troveManagerAddress =
-            getAddress(address(this), getBytecode(type(TroveManager).creationCode, address(addressesRegistry), address(_systemParams)), SALT);
+         IAddressesRegistry addressesRegistry = new AddressesRegistry(false);
+        addressesRegistry.initialize(address(this));
+    
+        address troveManagerAddress = getAddress(
+            address(this), getBytecode(type(TroveManagerTester).creationCode, address(addressesRegistry), address(_systemParams)), SALT
+        );
 
         return (addressesRegistry, troveManagerAddress);
     }

@@ -116,6 +116,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         ISystemParams systemParams;
         address stabilityPoolImpl;
         address stableTokenV3Impl;
+        address addressesRegistryImpl;
         address fpmm;
     }
 
@@ -178,7 +179,13 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         // _deployFPMM(r);
         _deploySystemParams(r);
 
-        IAddressesRegistry addressesRegistry = new AddressesRegistry(deployer);
+        IAddressesRegistry addressesRegistry = IAddressesRegistry(
+            address(new TransparentUpgradeableProxy(
+                address(r.addressesRegistryImpl), 
+                address(r.proxyAdmin), 
+                ""
+            ))
+        );
 
         address troveManagerAddress =
             _computeCreate2Address(type(TroveManager).creationCode, address(addressesRegistry), address(r.systemParams));
@@ -206,6 +213,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         r.proxyAdmin = ProxyAdmin(CONFIG.proxyAdmin);
         r.stableTokenV3Impl = address(new StableTokenV3{salt: SALT}(true));
         r.stabilityPoolImpl = address(new StabilityPool{salt: SALT}(true));
+        r.addressesRegistryImpl = address(new AddressesRegistry{salt: SALT}(true));
 
         assert(
             address(r.stableTokenV3Impl)
@@ -217,6 +225,12 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             address(r.stabilityPoolImpl)
                 == vm.computeCreate2Address(
                     SALT, keccak256(bytes.concat(type(StabilityPool).creationCode, abi.encode(true)))
+                )
+        );
+        assert(
+            address(r.addressesRegistryImpl)
+                == vm.computeCreate2Address(
+                    SALT, keccak256(bytes.concat(type(AddressesRegistry).creationCode, abi.encode(true)))
                 )
         );
     }
@@ -380,6 +394,8 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             liquidityStrategy: address(0),
             watchdogAddress: address(0)
         });
+
+        IAddressesRegistry(contracts.addressesRegistry).initialize(deployer);
         contracts.addressesRegistry.setAddresses(addressVars);
     }
 
