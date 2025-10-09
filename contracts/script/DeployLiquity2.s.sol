@@ -118,6 +118,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         address stableTokenV3Impl;
         address addressesRegistryImpl;
         address collSurplusPoolImpl;
+        address defaultPoolImpl;
         address fpmm;
     }
 
@@ -244,11 +245,18 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
 
     function _deployCollSurplusPoolImpl(DeploymentResult memory r) internal {
         r.collSurplusPoolImpl = address(new CollSurplusPool{salt: SALT}(true, r.contracts.addressesRegistry));
+        r.defaultPoolImpl = address(new DefaultPool{salt: SALT}(true, r.contracts.addressesRegistry));
 
         assert(
             address(r.collSurplusPoolImpl)
                 == vm.computeCreate2Address(
                     SALT, keccak256(bytes.concat(type(CollSurplusPool).creationCode, abi.encode(true, address(r.contracts.addressesRegistry))))
+                )
+        );
+        assert(
+            address(r.defaultPoolImpl)
+                == vm.computeCreate2Address(
+                    SALT, keccak256(bytes.concat(type(DefaultPool).creationCode, abi.encode(true, address(r.contracts.addressesRegistry))))
                 )
         );
     }
@@ -339,8 +347,6 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         addresses.activePool = _computeCreate2Address(
             type(ActivePool).creationCode, address(contracts.addressesRegistry), address(contracts.systemParams)
         );
-        addresses.defaultPool =
-            _computeCreate2Address(type(DefaultPool).creationCode, address(contracts.addressesRegistry));
         addresses.gasPool = _computeCreate2Address(type(GasPool).creationCode, address(contracts.addressesRegistry));
         addresses.sortedTroves =
             _computeCreate2Address(type(SortedTroves).creationCode, address(contracts.addressesRegistry));
@@ -349,11 +355,17 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         address stabilityPool =
             address(new TransparentUpgradeableProxy(address(r.stabilityPoolImpl), address(r.proxyAdmin), ""));
 
-        address collSurplusPool = 
-            address(new TransparentUpgradeableProxy(address(r.collSurplusPoolImpl), address(r.proxyAdmin), ""));
-
         contracts.stabilityPool = IStabilityPool(stabilityPool);
-        contracts.collSurplusPool = ICollSurplusPool(collSurplusPool);
+
+        // Deploy DefaultPool proxy
+        contracts.defaultPool = IDefaultPool(
+            address(new TransparentUpgradeableProxy(address(r.defaultPoolImpl), address(r.proxyAdmin), ""))
+        );
+
+        // Deploy CollSurplusPool proxy
+        contracts.collSurplusPool = ICollSurplusPool(
+            address(new TransparentUpgradeableProxy(address(r.collSurplusPoolImpl), address(r.proxyAdmin), ""))
+        );
 
         // Set up addresses in registry
         _setupAddressesRegistry(contracts, addresses, r);
@@ -362,7 +374,8 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         _deployProtocolContracts(contracts, addresses);
 
         IStabilityPool(stabilityPool).initialize(contracts.addressesRegistry, contracts.systemParams);
-        ICollSurplusPool(collSurplusPool).initialize();
+        contracts.defaultPool.initialize();
+        contracts.collSurplusPool.initialize();
 
         address[] memory minters = new address[](2);
         minters[0] = address(contracts.borrowerOperations);
@@ -402,7 +415,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             stabilityPool: contracts.stabilityPool,
             priceFeed: contracts.priceFeed,
             activePool: IActivePool(addresses.activePool),
-            defaultPool: IDefaultPool(addresses.defaultPool),
+            defaultPool: contracts.defaultPool,
             gasPoolAddress: addresses.gasPool,
             collSurplusPool: contracts.collSurplusPool,
             sortedTroves: ISortedTroves(addresses.sortedTroves),
@@ -431,7 +444,6 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         contracts.troveManager = new TroveManager{salt: SALT}(contracts.addressesRegistry, contracts.systemParams);
         contracts.troveNFT = new TroveNFT{salt: SALT}(contracts.addressesRegistry);
         contracts.activePool = new ActivePool{salt: SALT}(contracts.addressesRegistry, contracts.systemParams);
-        contracts.defaultPool = new DefaultPool{salt: SALT}(contracts.addressesRegistry);
         contracts.gasPool = new GasPool{salt: SALT}(contracts.addressesRegistry);
         contracts.sortedTroves = new SortedTroves{salt: SALT}(contracts.addressesRegistry);
 
@@ -439,7 +451,6 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         assert(address(contracts.troveManager) == addresses.troveManager);
         assert(address(contracts.troveNFT) == addresses.troveNFT);
         assert(address(contracts.activePool) == addresses.activePool);
-        assert(address(contracts.defaultPool) == addresses.defaultPool);
         assert(address(contracts.gasPool) == addresses.gasPool);
         assert(address(contracts.sortedTroves) == addresses.sortedTroves);
     }
@@ -523,6 +534,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             string.concat('"stableTokenV3Impl":"', address(deployed.stableTokenV3Impl).toHexString(), '",'),
             string.concat('"stabilityPoolImpl":"', address(deployed.stabilityPoolImpl).toHexString(), '",'),
             string.concat('"collSurplusPoolImpl":"', address(deployed.collSurplusPoolImpl).toHexString(), '",'),
+            string.concat('"defaultPoolImpl":"', address(deployed.defaultPoolImpl).toHexString(), '",'),
             string.concat('"systemParams":"', address(deployed.systemParams).toHexString(), '",'),
             string.concat('"multiTroveGetter":"', address(deployed.multiTroveGetter).toHexString(), '",')
         );

@@ -450,7 +450,7 @@ contract TestDeployer is MetadataDeployment {
             address(this), getBytecode(type(ActivePool).creationCode, address(contracts.addressesRegistry), address(_systemParams)), SALT
         );
         addresses.defaultPool = getAddress(
-            address(this), getBytecode(type(DefaultPool).creationCode, address(contracts.addressesRegistry)), SALT
+            address(this), getBytecode(type(DefaultPool).creationCode, bool(false), address(contracts.addressesRegistry)), SALT
         );
         addresses.gasPool = getAddress(
             address(this), getBytecode(type(GasPool).creationCode, address(contracts.addressesRegistry)), SALT
@@ -494,7 +494,7 @@ contract TestDeployer is MetadataDeployment {
         contracts.troveNFT = new TroveNFT{salt: SALT}(contracts.addressesRegistry);
         contracts.stabilityPool = new StabilityPool{salt: stabilityPoolSalt}(false);
         contracts.activePool = new ActivePool{salt: SALT}(contracts.addressesRegistry, _systemParams);
-        contracts.pools.defaultPool = new DefaultPool{salt: SALT}(contracts.addressesRegistry);
+        contracts.pools.defaultPool = new DefaultPool{salt: SALT}(false, contracts.addressesRegistry);
         contracts.pools.gasPool = new GasPool{salt: SALT}(contracts.addressesRegistry);
         contracts.pools.collSurplusPool = new CollSurplusPool{salt: SALT}(false, contracts.addressesRegistry);
         contracts.sortedTroves = new SortedTroves{salt: SALT}(contracts.addressesRegistry);
@@ -510,6 +510,7 @@ contract TestDeployer is MetadataDeployment {
         assert(address(contracts.sortedTroves) == addresses.sortedTroves);
 
         contracts.stabilityPool.initialize(contracts.addressesRegistry, _systemParams);
+        contracts.pools.defaultPool.initialize();
         contracts.pools.collSurplusPool.initialize();
 
         // Connect contracts
@@ -654,7 +655,7 @@ contract TestDeployer is MetadataDeployment {
             address(this), getBytecode(type(ActivePool).creationCode, address(contracts.addressesRegistry), address(_systemParams)), SALT
         );
         addresses.defaultPool = getAddress(
-            address(this), getBytecode(type(DefaultPool).creationCode, address(contracts.addressesRegistry)), SALT
+            address(this), getBytecode(type(DefaultPool).creationCode, bool(false), address(contracts.addressesRegistry)), SALT
         );
         addresses.gasPool = getAddress(
             address(this), getBytecode(type(GasPool).creationCode, address(contracts.addressesRegistry)), SALT
@@ -701,7 +702,7 @@ contract TestDeployer is MetadataDeployment {
         contracts.troveNFT = new TroveNFT{salt: SALT}(contracts.addressesRegistry);
         contracts.stabilityPool = new StabilityPool{salt: stabilityPoolSalt}(false);
         contracts.activePool = new ActivePool{salt: SALT}(contracts.addressesRegistry, _systemParams);
-        contracts.defaultPool = new DefaultPool{salt: SALT}(contracts.addressesRegistry);
+        contracts.defaultPool = new DefaultPool{salt: SALT}(false, contracts.addressesRegistry);
         contracts.gasPool = new GasPool{salt: SALT}(contracts.addressesRegistry);
         contracts.collSurplusPool = new CollSurplusPool{salt: SALT}(false, contracts.addressesRegistry);
         contracts.sortedTroves = new SortedTroves{salt: SALT}(contracts.addressesRegistry);
@@ -717,6 +718,7 @@ contract TestDeployer is MetadataDeployment {
         assert(address(contracts.sortedTroves) == addresses.sortedTroves);
 
         contracts.stabilityPool.initialize(contracts.addressesRegistry, _systemParams);
+        contracts.defaultPool.initialize();
         contracts.collSurplusPool.initialize();
 
         // Connect contracts
