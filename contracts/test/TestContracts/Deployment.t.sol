@@ -375,7 +375,9 @@ contract TestDeployer is MetadataDeployment {
             // TODO: add liquidity strategy
             liquidityStrategy: makeAddr("liquidityStrategy"),
             // TODO: add watchdog address
-            watchdogAddress: makeAddr("watchdog")
+            watchdogAddress: makeAddr("watchdog"),
+            // TODO: add oracle adapter address
+            oracleAdapterAddress: makeAddr("oracleAdapter")
         });
         contracts.addressesRegistry.setAddresses(addressVars);
 

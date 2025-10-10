@@ -355,7 +355,9 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             // TODO: set liquidity strategy
             liquidityStrategy: address(0),
             // TODO: set watchdog multisig address
-            watchdogAddress: address(0)
+            watchdogAddress: address(0),
+            // TODO: set oracle adapter address
+            oracleAdapterAddress: address(0)
         });
         contracts.addressesRegistry.setAddresses(addressVars);
     }

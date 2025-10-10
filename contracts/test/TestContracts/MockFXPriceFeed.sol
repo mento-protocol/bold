@@ -10,11 +10,16 @@ import "./Interfaces/IMockFXPriceFeed.sol";
 */
 contract MockFXPriceFeed is IMockFXPriceFeed {
 
+    string private _revertMsg = "MockFXPriceFeed: no valid price";
     uint256 private _price = 200 * 1e18;
-    bool private _isShutdown = false;
+    bool private _hasValidPrice = true;
 
     function getPrice() external view override returns (uint256) {
         return _price;
+    }
+
+    function setValidPrice(bool valid) external {
+        _hasValidPrice = valid;
     }
 
     function setPrice(uint256 price) external {
@@ -22,12 +27,12 @@ contract MockFXPriceFeed is IMockFXPriceFeed {
     }
 
     function fetchPrice() external override returns (uint256) {
-        require(!_isShutdown, "MockFXPriceFeed: shutdown");
+        require(_hasValidPrice, _revertMsg);
 
         return _price;
     }
 
-    function shutdown() external {
-        _isShutdown = true;
+    function REVERT_MSG() external view override returns (string memory) {
+        return _revertMsg;
     }
 }

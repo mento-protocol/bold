@@ -40,6 +40,7 @@ interface IAddressesRegistry {
         IERC20Metadata gasToken;
         address liquidityStrategy;
         address watchdogAddress;
+        address oracleAdapterAddress;
     }
 
     function CCR() external returns (uint256);
@@ -69,6 +70,7 @@ interface IAddressesRegistry {
     function gasToken() external view returns (IERC20Metadata);
     function liquidityStrategy() external view returns (address);
     function watchdogAddress() external view returns (address);
+    function oracleAdapterAddress() external view returns (address);
 
     function setAddresses(AddressVars memory _vars) external;
 }
