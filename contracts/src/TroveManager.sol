@@ -13,10 +13,10 @@ import "./Interfaces/ITroveNFT.sol";
 import "./Interfaces/ICollateralRegistry.sol";
 import "./Interfaces/IWETH.sol";
 import "./Interfaces/ISystemParams.sol";
-import "./Dependencies/LiquityBase.sol";
+import "./Dependencies/LiquityBaseInit.sol";
 import "./Dependencies/Constants.sol";
 
-contract TroveManager is LiquityBase, ITroveManager, ITroveEvents {
+contract TroveManager is LiquityBaseInit, ITroveManager, ITroveEvents {
     // --- Connected contract declarations ---
 
     ITroveNFT public troveNFT;
@@ -195,9 +195,13 @@ contract TroveManager is LiquityBase, ITroveManager, ITroveEvents {
     event SortedTrovesAddressChanged(address _sortedTrovesAddress);
     event CollateralRegistryAddressChanged(address _collateralRegistryAddress);
 
-    constructor(IAddressesRegistry _addressesRegistry, ISystemParams _systemParams) LiquityBase(_addressesRegistry) {
+    constructor(bool disableInitializers, IAddressesRegistry _addressesRegistry, ISystemParams _systemParams) {
+        if (disableInitializers) {
+            _disableInitializers();
+        }
+
         systemParamsAddress = address(_systemParams);
-        
+
         CCR = _systemParams.CCR();
         MCR = _systemParams.MCR();
         SCR = _systemParams.SCR();
@@ -218,6 +222,15 @@ contract TroveManager is LiquityBase, ITroveManager, ITroveEvents {
         sortedTroves = _addressesRegistry.sortedTroves();
         gasToken = _addressesRegistry.gasToken();
         collateralRegistry = _addressesRegistry.collateralRegistry();
+    }
+
+    /*
+     * Initializes proxy storage and emits configuration events
+     * Configuration addresses are immutable from constructor. This function
+     * initializes LiquityBase and emits events for indexing.
+     */
+    function initialize(IAddressesRegistry _addressesRegistry) external initializer {
+        __LiquityBase_init(_addressesRegistry);
 
         emit TroveNFTAddressChanged(address(troveNFT));
         emit BorrowerOperationsAddressChanged(address(borrowerOperations));

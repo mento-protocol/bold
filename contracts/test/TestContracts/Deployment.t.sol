@@ -181,6 +181,10 @@ contract TestDeployer is MetadataDeployment {
         return abi.encodePacked(_creationCode, abi.encode(_disable, _addressesRegistry));
     }
 
+    function getBytecode(bytes memory _creationCode, bool _disable, address _addressesRegistry, address _systemParams) public pure returns (bytes memory) {
+        return abi.encodePacked(_creationCode, abi.encode(_disable, _addressesRegistry, _systemParams));
+    }
+
     function getAddress(address _deployer, bytes memory _bytecode, bytes32 _salt) public pure returns (address) {
         bytes32 hash = keccak256(abi.encodePacked(bytes1(0xff), _deployer, _salt, keccak256(_bytecode)));
 
@@ -346,7 +350,7 @@ contract TestDeployer is MetadataDeployment {
         IAddressesRegistry addressesRegistry = new AddressesRegistry(false);
         addressesRegistry.initialize(address(this));
 
-        address troveManagerAddress = getAddress(address(this), getBytecode(type(TroveManagerTester).creationCode, address(addressesRegistry), address(_systemParams)), SALT);
+        address troveManagerAddress = getAddress(address(this), getBytecode(type(TroveManagerTester).creationCode, bool(false), address(addressesRegistry), address(_systemParams)), SALT);
 
         return (addressesRegistry, troveManagerAddress);
     }
@@ -490,7 +494,7 @@ contract TestDeployer is MetadataDeployment {
         contracts.addressesRegistry.setAddresses(addressVars);
 
         contracts.borrowerOperations = new BorrowerOperationsTester{salt: SALT}(contracts.addressesRegistry, _systemParams);
-        contracts.troveManager = new TroveManagerTester{salt: SALT}(contracts.addressesRegistry, _systemParams);
+        contracts.troveManager = new TroveManagerTester{salt: SALT}(false, contracts.addressesRegistry, _systemParams);
         contracts.troveNFT = new TroveNFT{salt: SALT}(contracts.addressesRegistry);
         contracts.stabilityPool = new StabilityPool{salt: stabilityPoolSalt}(false);
         contracts.activePool = new ActivePool{salt: SALT}(contracts.addressesRegistry, _systemParams);
@@ -510,6 +514,7 @@ contract TestDeployer is MetadataDeployment {
         assert(address(contracts.sortedTroves) == addresses.sortedTroves);
 
         contracts.stabilityPool.initialize(contracts.addressesRegistry, _systemParams);
+        contracts.troveManager.initialize(contracts.addressesRegistry);
         contracts.pools.defaultPool.initialize();
         contracts.pools.collSurplusPool.initialize();
 
@@ -698,7 +703,7 @@ contract TestDeployer is MetadataDeployment {
         contracts.addressesRegistry.setAddresses(addressVars);
 
         contracts.borrowerOperations = new BorrowerOperationsTester{salt: SALT}(contracts.addressesRegistry, _systemParams);
-        contracts.troveManager = new TroveManager{salt: SALT}(contracts.addressesRegistry, _systemParams);
+        contracts.troveManager = new TroveManager{salt: SALT}(false, contracts.addressesRegistry, _systemParams);
         contracts.troveNFT = new TroveNFT{salt: SALT}(contracts.addressesRegistry);
         contracts.stabilityPool = new StabilityPool{salt: stabilityPoolSalt}(false);
         contracts.activePool = new ActivePool{salt: SALT}(contracts.addressesRegistry, _systemParams);
@@ -718,6 +723,7 @@ contract TestDeployer is MetadataDeployment {
         assert(address(contracts.sortedTroves) == addresses.sortedTroves);
 
         contracts.stabilityPool.initialize(contracts.addressesRegistry, _systemParams);
+        contracts.troveManager.initialize(contracts.addressesRegistry);
         contracts.defaultPool.initialize();
         contracts.collSurplusPool.initialize();
 

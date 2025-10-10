@@ -374,6 +374,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         _deployProtocolContracts(contracts, addresses);
 
         IStabilityPool(stabilityPool).initialize(contracts.addressesRegistry, contracts.systemParams);
+        contracts.troveManager.initialize(contracts.addressesRegistry);
         contracts.defaultPool.initialize();
         contracts.collSurplusPool.initialize();
 
@@ -441,7 +442,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         contracts.borrowerOperations =
             new BorrowerOperations{salt: SALT}(false);
         contracts.borrowerOperations.initialize(contracts.addressesRegistry, contracts.systemParams, msg.sender);
-        contracts.troveManager = new TroveManager{salt: SALT}(contracts.addressesRegistry, contracts.systemParams);
+        contracts.troveManager = new TroveManager{salt: SALT}(false, contracts.addressesRegistry, contracts.systemParams);
         contracts.troveNFT = new TroveNFT{salt: SALT}(contracts.addressesRegistry);
         contracts.activePool = new ActivePool{salt: SALT}(contracts.addressesRegistry, contracts.systemParams);
         contracts.gasPool = new GasPool{salt: SALT}(contracts.addressesRegistry);

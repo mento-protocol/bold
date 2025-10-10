@@ -18,7 +18,9 @@ contract TroveManagerTester is ITroveManagerTester, TroveManager {
     uint256 public immutable BCR;
 
 
-    constructor(IAddressesRegistry _addressesRegistry, ISystemParams _systemParams) TroveManager(_addressesRegistry, _systemParams) {
+    constructor(bool disableInitializers, IAddressesRegistry _addressesRegistry, ISystemParams _systemParams)
+        TroveManager(disableInitializers, _addressesRegistry, _systemParams)
+    {
         BCR = _systemParams.BCR();
     }
 
