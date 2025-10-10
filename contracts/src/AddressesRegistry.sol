@@ -3,9 +3,9 @@
 pragma solidity 0.8.24;
 
 import "./Interfaces/IAddressesRegistry.sol";
-import "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
+import "openzeppelin-contracts/contracts/access/Ownable.sol";
 
-contract AddressesRegistry is OwnableUpgradeable, IAddressesRegistry {
+contract AddressesRegistry is Ownable, IAddressesRegistry {
     IERC20Metadata public collToken;
     IBorrowerOperations public borrowerOperations;
     ITroveManager public troveManager;
@@ -48,15 +48,8 @@ contract AddressesRegistry is OwnableUpgradeable, IAddressesRegistry {
     event LiquidityStrategyAddressChanged(address _liquidityStrategyAddress);
     event WatchdogAddressChanged(address _watchdogAddress);
 
-    constructor(bool disableInitializers) {
-        if (disableInitializers) {
-            _disableInitializers();
-        }
-    }
-
-    function initialize(address _owner) external initializer {
-        __Ownable_init();
-        transferOwnership(_owner);
+    constructor(address _owner) {
+        _transferOwnership(_owner);
     }
 
     function setAddresses(AddressVars memory _vars) external onlyOwner {

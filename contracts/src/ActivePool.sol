@@ -4,6 +4,7 @@ pragma solidity 0.8.24;
 
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 import "openzeppelin-contracts/contracts/utils/math/Math.sol";
+import "openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
 
 import "./Dependencies/Constants.sol";
 import "./Interfaces/IActivePool.sol";
@@ -20,7 +21,7 @@ import "./Interfaces/ISystemParams.sol";
  * Stability Pool, the Default Pool, or both, depending on the liquidation conditions.
  *
  */
-contract ActivePool is IActivePool {
+contract ActivePool is Initializable, IActivePool {
     using SafeERC20 for IERC20;
 
     string public constant NAME = "ActivePool";
@@ -75,7 +76,10 @@ contract ActivePool is IActivePool {
     event ActivePoolBoldDebtUpdated(uint256 _recordedDebtSum);
     event ActivePoolCollBalanceUpdated(uint256 _collBalance);
 
-    constructor(IAddressesRegistry _addressesRegistry, ISystemParams _systemParams) {
+    constructor(bool disableInitializers, IAddressesRegistry _addressesRegistry, ISystemParams _systemParams) {
+        if (disableInitializers) {
+            _disableInitializers();
+        }
         systemParamsAddress = address(_systemParams);
         collToken = _addressesRegistry.collToken();
         borrowerOperationsAddress = address(_addressesRegistry.borrowerOperations());
@@ -92,7 +96,9 @@ contract ActivePool is IActivePool {
         emit TroveManagerAddressChanged(troveManagerAddress);
         emit StabilityPoolAddressChanged(address(stabilityPool));
         emit DefaultPoolAddressChanged(defaultPoolAddress);
+    }
 
+    function initialize() external initializer {
         // Allow funds movements between Liquity contracts
         collToken.approve(defaultPoolAddress, type(uint256).max);
     }

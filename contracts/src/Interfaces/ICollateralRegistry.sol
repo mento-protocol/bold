@@ -7,6 +7,7 @@ import "./IBoldToken.sol";
 import "./ITroveManager.sol";
 
 interface ICollateralRegistry {
+    function initialize() external;
     function baseRate() external view returns (uint256);
     function lastFeeOperationTime() external view returns (uint256);
 

@@ -9,7 +9,7 @@ import "../Interfaces/IAddressesRegistry.sol";
 import "../Interfaces/ITroveNFT.sol";
 
 contract AddRemoveManagersInit is Initializable, IAddRemoveManagers {
-    ITroveNFT internal troveNFT;
+    ITroveNFT internal immutable troveNFT;
 
     struct RemoveManagerReceiver {
         address manager;
@@ -45,8 +45,11 @@ contract AddRemoveManagersInit is Initializable, IAddRemoveManagers {
     event AddManagerUpdated(uint256 indexed _troveId, address _newAddManager);
     event RemoveManagerAndReceiverUpdated(uint256 indexed _troveId, address _newRemoveManager, address _newReceiver);
 
-    function __AddRemoveManagers_init(IAddressesRegistry _addressesRegistry) internal onlyInitializing {
+    constructor(IAddressesRegistry _addressesRegistry) {
         troveNFT = _addressesRegistry.troveNFT();
+    }
+
+    function __AddRemoveManagers_init() internal onlyInitializing {
         emit TroveNFTAddressChanged(address(troveNFT));
     }
 

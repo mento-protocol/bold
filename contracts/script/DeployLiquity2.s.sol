@@ -22,9 +22,10 @@ import {StringFormatting} from "test/Utils/StringFormatting.sol";
 import {Accounts} from "test/TestContracts/Accounts.sol";
 import {ERC20Faucet} from "test/TestContracts/ERC20Faucet.sol";
 import {WETHTester} from "test/TestContracts/WETHTester.sol";
+import "src/Interfaces/IHintHelpers.sol";
 import "src/AddressesRegistry.sol";
 import "src/ActivePool.sol";
-import "src/BoldToken.sol";
+import { BoldToken } from "src/BoldToken.sol";
 import "src/BorrowerOperations.sol";
 import "src/TroveManager.sol";
 import "src/TroveNFT.sol";
@@ -107,20 +108,25 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
     }
 
     struct DeploymentResult {
+        IStabilityPool stabilityPool;
         LiquityContracts contracts;
         ICollateralRegistry collateralRegistry;
-        HintHelpers hintHelpers;
+        IHintHelpers hintHelpers;
         MultiTroveGetter multiTroveGetter;
         ProxyAdmin proxyAdmin;
         IStableTokenV3 stableToken;
         ISystemParams systemParams;
-        address stabilityPoolImpl;
+        address fpmm;
+        address systemParamsImpl;
+        address collateralRegistryImpl;
         address stableTokenV3Impl;
-        address addressesRegistryImpl;
         address collSurplusPoolImpl;
         address defaultPoolImpl;
-        address systemParamsImpl;
-        address fpmm;
+        address stabilityPoolImpl;
+        address borrowerOperationsImpl;
+        address activePoolImpl;
+        address hintHelpersImpl;
+        address troveManagerImpl;
     }
 
     struct DeploymentConfig {
@@ -177,106 +183,31 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
     }
 
     function _deployAndConnectContracts() internal returns (DeploymentResult memory r) {
-        _deployProxyInfrastructure(r);
-
-        // Deploy AddressesRegistry proxy
-        IAddressesRegistry addressesRegistry = IAddressesRegistry(
-            address(new TransparentUpgradeableProxy(
-                address(r.addressesRegistryImpl),
-                address(r.proxyAdmin),
-                ""
-            ))
-        );
-        r.contracts.addressesRegistry = addressesRegistry;
-
-        // Deploy afterwards as it needs the addressesRegistry address
-        _deployCollSurplusPoolImpl(r);
-
-        _deployStableToken(r);
-        // _deployFPMM(r);
-        _deploySystemParams(r);
-
-        address troveManagerAddress =
-            _computeCreate2Address(type(TroveManager).creationCode, address(addressesRegistry), address(r.systemParams));
-
-        IERC20Metadata collToken = IERC20Metadata(CONFIG.USDm_ALFAJORES_ADDRESS);
-
-        IERC20Metadata[] memory collaterals = new IERC20Metadata[](1);
-        collaterals[0] = collToken;
-
-        ITroveManager[] memory troveManagers = new ITroveManager[](1);
-        troveManagers[0] = ITroveManager(troveManagerAddress);
-
-        r.collateralRegistry =
-            new CollateralRegistry(IBoldToken(address(r.stableToken)), collaterals, troveManagers, r.systemParams);
-        r.hintHelpers = new HintHelpers(r.collateralRegistry, r.systemParams);
-        r.multiTroveGetter = new MultiTroveGetter(r.collateralRegistry);
-
-        IPriceFeed priceFeed = new PriceFeedTestnet();
-
-        r.contracts =
-            _deployAndConnectCollateralContracts(collToken, priceFeed, addressesRegistry, troveManagerAddress, r);
-    }
-
-    function _deployProxyInfrastructure(DeploymentResult memory r) internal {
         r.proxyAdmin = ProxyAdmin(CONFIG.proxyAdmin);
-        r.stableTokenV3Impl = address(new StableTokenV3{salt: SALT}(true));
-        r.stabilityPoolImpl = address(new StabilityPool{salt: SALT}(true));
-        r.addressesRegistryImpl = address(new AddressesRegistry{salt: SALT}(true));
+        _deployAddressesRegistry(r);
+        _deploySystemParams(r);
+        _deployStableToken(r);
+        _deployStabilityPool(r);
+        _deployCollSurplusPool(r);
+        _deployDefaultPool(r);
+        _deployCollateralRegistry(r);
+        _deployHintHelpers(r);
+        // _deployFPMM(r);
+        r.multiTroveGetter = new MultiTroveGetter(r.collateralRegistry);
+        r.contracts.priceFeed = new PriceFeedTestnet();
 
-        _deploySystemParamsImpl(r);
-
-        assert(
-            address(r.stableTokenV3Impl)
-                == vm.computeCreate2Address(
-                    SALT, keccak256(bytes.concat(type(StableTokenV3).creationCode, abi.encode(true)))
-                )
-        );
-        assert(
-            address(r.stabilityPoolImpl)
-                == vm.computeCreate2Address(
-                    SALT, keccak256(bytes.concat(type(StabilityPool).creationCode, abi.encode(true)))
-                )
-        );
-        assert(
-            address(r.addressesRegistryImpl)
-                == vm.computeCreate2Address(
-                    SALT, keccak256(bytes.concat(type(AddressesRegistry).creationCode, abi.encode(true)))
-                )
-        );
+        _deployAndConnectCollateralContracts(r);
     }
 
-    function _deployCollSurplusPoolImpl(DeploymentResult memory r) internal {
-        r.collSurplusPoolImpl = address(new CollSurplusPool{salt: SALT}(true, r.contracts.addressesRegistry));
-        r.defaultPoolImpl = address(new DefaultPool{salt: SALT}(true, r.contracts.addressesRegistry));
-
-        assert(
-            address(r.collSurplusPoolImpl)
-                == vm.computeCreate2Address(
-                    SALT, keccak256(bytes.concat(type(CollSurplusPool).creationCode, abi.encode(true, address(r.contracts.addressesRegistry))))
-                )
-        );
-        assert(
-            address(r.defaultPoolImpl)
-                == vm.computeCreate2Address(
-                    SALT, keccak256(bytes.concat(type(DefaultPool).creationCode, abi.encode(true, address(r.contracts.addressesRegistry))))
-                )
-        );
+    function _deployAddressesRegistry(DeploymentResult memory r) internal {
+        address addressesRegistry = address(new AddressesRegistry{salt: SALT}(deployer));
+        assert(addressesRegistry == vm.computeCreate2Address(
+            SALT, keccak256(bytes.concat(type(AddressesRegistry).creationCode, abi.encode(deployer)))
+        ));
+        r.contracts.addressesRegistry = IAddressesRegistry(addressesRegistry);
     }
 
-    function _deployStableToken(DeploymentResult memory r) internal {
-        r.stableToken = IStableTokenV3(
-            address(new TransparentUpgradeableProxy(address(r.stableTokenV3Impl), address(r.proxyAdmin), ""))
-        );
-    }
-
-    function _deployFPMM(DeploymentResult memory r) internal {
-        r.fpmm = IFPMMFactory(CONFIG.fpmmFactory).deployFPMM(
-            CONFIG.fpmmImplementation, address(r.stableToken), CONFIG.USDm_ALFAJORES_ADDRESS, CONFIG.referenceRateFeedID
-        );
-    }
-
-    function _deploySystemParamsImpl(DeploymentResult memory r) internal {
+    function _deploySystemParams(DeploymentResult memory r) internal {
         ISystemParams.DebtParams memory debtParams = ISystemParams.DebtParams({minDebt: 2000e18});
 
         ISystemParams.LiquidationParams memory liquidationParams =
@@ -317,90 +248,137 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
                 poolParams
             )
         );
-    }
 
-    function _deploySystemParams(DeploymentResult memory r) internal {
-        address systemParamsProxy = address(
-            new TransparentUpgradeableProxy(address(r.systemParamsImpl), address(r.proxyAdmin), "")
+        r.systemParams = ISystemParams(
+            address(new TransparentUpgradeableProxy(r.systemParamsImpl, address(r.proxyAdmin), ""))
         );
-
-        r.systemParams = ISystemParams(systemParamsProxy);
         r.systemParams.initialize();
     }
 
-    function _deployAndConnectCollateralContracts(
-        IERC20Metadata _collToken,
-        IPriceFeed _priceFeed,
-        IAddressesRegistry _addressesRegistry,
-        address _troveManagerAddress,
-        DeploymentResult memory r
-    ) internal returns (LiquityContracts memory contracts) {
+    function _deployStableToken(DeploymentResult memory r) internal {
+        r.stableTokenV3Impl = address(new StableTokenV3{salt: SALT}(true));
+
+        assert(r.stableTokenV3Impl == vm.computeCreate2Address(
+            SALT, keccak256(bytes.concat(type(StableTokenV3).creationCode, abi.encode(true)))
+        ));
+
+        r.stableToken = IStableTokenV3(
+            address(new TransparentUpgradeableProxy(r.stableTokenV3Impl, address(r.proxyAdmin), ""))
+        );
+    }
+
+    function _deployStabilityPool(DeploymentResult memory r) internal {
+        r.stabilityPoolImpl = address(new StabilityPool{salt: SALT}(true, r.contracts.addressesRegistry, r.systemParams));
+        assert(r.stabilityPoolImpl == vm.computeCreate2Address(
+            SALT, keccak256(bytes.concat(type(StabilityPool).creationCode, abi.encode(true, r.contracts.addressesRegistry, r.systemParams)))
+        ));
+        r.stabilityPool = IStabilityPool(
+            address(new TransparentUpgradeableProxy(r.stabilityPoolImpl, address(r.proxyAdmin), ""))
+        );
+        r.stabilityPool.initialize();
+    }
+
+    function _deployCollSurplusPool(DeploymentResult memory r) internal {
+        r.collSurplusPoolImpl = address(new CollSurplusPool{salt: SALT}(true, r.contracts.addressesRegistry));
+
+        assert(r.collSurplusPoolImpl == vm.computeCreate2Address(
+          SALT, keccak256(bytes.concat(type(CollSurplusPool).creationCode, abi.encode(true, address(r.contracts.addressesRegistry))))
+        ));
+
+        r.contracts.collSurplusPool = ICollSurplusPool(
+            address(new TransparentUpgradeableProxy(r.collSurplusPoolImpl, address(r.proxyAdmin), ""))
+        );
+    }
+
+    function _deployDefaultPool(DeploymentResult memory r) internal {
+        r.defaultPoolImpl = address(new DefaultPool{salt: SALT}(true, r.contracts.addressesRegistry));
+        assert(r.defaultPoolImpl == vm.computeCreate2Address(
+          SALT, keccak256(bytes.concat(type(DefaultPool).creationCode, abi.encode(true, address(r.contracts.addressesRegistry))))
+        ));
+        r.contracts.defaultPool = IDefaultPool(
+            address(new TransparentUpgradeableProxy(r.defaultPoolImpl, address(r.proxyAdmin), ""))
+        );
+    }
+
+    function _deployCollateralRegistry(DeploymentResult memory r) internal {
+        address troveManagerAddress =
+            _computeCreate2Address(type(TroveManager).creationCode, address(r.contracts.addressesRegistry), address(r.systemParams));
+
+        r.contracts.collToken = IERC20Metadata(CONFIG.USDm_ALFAJORES_ADDRESS);
+
+        IERC20Metadata[] memory collaterals = new IERC20Metadata[](1);
+        collaterals[0] = r.contracts.collToken;
+
+        ITroveManager[] memory troveManagers = new ITroveManager[](1);
+        troveManagers[0] = ITroveManager(troveManagerAddress);
+
+        r.collateralRegistryImpl = address(
+          new CollateralRegistry(true, IBoldToken(address(r.stableToken)), collaterals, troveManagers, r.systemParams)
+        );
+        r.collateralRegistry = ICollateralRegistry(
+            address(new TransparentUpgradeableProxy(r.collateralRegistryImpl, address(r.proxyAdmin), ""))
+        );
+    }
+
+    function _deployHintHelpers(DeploymentResult memory r) internal {
+        r.hintHelpersImpl = address(new HintHelpers(true, r.collateralRegistry, r.systemParams));
+        r.hintHelpers = IHintHelpers(
+            address(new TransparentUpgradeableProxy(r.hintHelpersImpl, address(r.proxyAdmin), ""))
+        );
+    }
+
+    function _deployFPMM(DeploymentResult memory r) internal {
+        r.fpmm = IFPMMFactory(CONFIG.fpmmFactory).deployFPMM(
+            CONFIG.fpmmImplementation, address(r.stableToken), CONFIG.USDm_ALFAJORES_ADDRESS, CONFIG.referenceRateFeedID
+        );
+    }
+
+    function _deployAndConnectCollateralContracts(DeploymentResult memory r) internal {
         LiquityContractAddresses memory addresses;
-        contracts.collToken = _collToken;
-        contracts.addressesRegistry = _addressesRegistry;
-        contracts.priceFeed = _priceFeed;
-        contracts.systemParams = r.systemParams;
         // TODO: replace with governance timelock on mainnet
-        contracts.interestRouter = IInterestRouter(0x56fD3F2bEE130e9867942D0F463a16fBE49B8d81);
+        r.contracts.interestRouter = IInterestRouter(0x56fD3F2bEE130e9867942D0F463a16fBE49B8d81);
 
-        addresses.troveManager = _troveManagerAddress;
+        addresses.troveManager = address(r.contracts.troveManager);
 
-        contracts.metadataNFT = deployMetadata(SALT);
+        r.contracts.metadataNFT = deployMetadata(SALT);
         addresses.metadataNFT = vm.computeCreate2Address(
             SALT, keccak256(getBytecode(type(MetadataNFT).creationCode, address(initializedFixedAssetReader)))
         );
-        assert(address(contracts.metadataNFT) == addresses.metadataNFT);
+        assert(address(r.contracts.metadataNFT) == addresses.metadataNFT);
 
         addresses.borrowerOperations = _computeCreate2Address(
-            type(BorrowerOperations).creationCode, address(contracts.addressesRegistry), address(contracts.systemParams)
+            type(BorrowerOperations).creationCode, address(r.contracts.addressesRegistry), address(r.contracts.systemParams)
         );
-        addresses.troveNFT = _computeCreate2Address(type(TroveNFT).creationCode, address(contracts.addressesRegistry));
+        addresses.troveNFT = _computeCreate2Address(type(TroveNFT).creationCode, address(r.contracts.addressesRegistry));
         addresses.activePool = _computeCreate2Address(
-            type(ActivePool).creationCode, address(contracts.addressesRegistry), address(contracts.systemParams)
+            type(ActivePool).creationCode, address(r.contracts.addressesRegistry), address(r.contracts.systemParams)
         );
-        addresses.gasPool = _computeCreate2Address(type(GasPool).creationCode, address(contracts.addressesRegistry));
+        addresses.gasPool = _computeCreate2Address(type(GasPool).creationCode, address(r.contracts.addressesRegistry));
         addresses.sortedTroves =
-            _computeCreate2Address(type(SortedTroves).creationCode, address(contracts.addressesRegistry));
-
-        // Deploy StabilityPool proxy
-        address stabilityPool =
-            address(new TransparentUpgradeableProxy(address(r.stabilityPoolImpl), address(r.proxyAdmin), ""));
-
-        contracts.stabilityPool = IStabilityPool(stabilityPool);
-
-        // Deploy DefaultPool proxy
-        contracts.defaultPool = IDefaultPool(
-            address(new TransparentUpgradeableProxy(address(r.defaultPoolImpl), address(r.proxyAdmin), ""))
-        );
-
-        // Deploy CollSurplusPool proxy
-        contracts.collSurplusPool = ICollSurplusPool(
-            address(new TransparentUpgradeableProxy(address(r.collSurplusPoolImpl), address(r.proxyAdmin), ""))
-        );
+            _computeCreate2Address(type(SortedTroves).creationCode, address(r.contracts.addressesRegistry));
 
         // Set up addresses in registry
-        _setupAddressesRegistry(contracts, addresses, r);
+        _setupAddressesRegistry(r.contracts, addresses, r);
 
         // Deploy core protocol contracts
-        _deployProtocolContracts(contracts, addresses);
+        _deployProtocolContracts(r, addresses);
 
-        IStabilityPool(stabilityPool).initialize(contracts.addressesRegistry, contracts.systemParams);
-        contracts.troveManager.initialize(contracts.addressesRegistry);
-        contracts.defaultPool.initialize();
-        contracts.collSurplusPool.initialize();
+        r.contracts.troveManager.initialize();
+        r.contracts.defaultPool.initialize();
+        r.contracts.collSurplusPool.initialize();
 
         address[] memory minters = new address[](2);
-        minters[0] = address(contracts.borrowerOperations);
-        minters[1] = address(contracts.activePool);
+        minters[0] = address(r.contracts.borrowerOperations);
+        minters[1] = address(r.contracts.activePool);
 
         address[] memory burners = new address[](4);
-        burners[0] = address(contracts.troveManager);
+        burners[0] = address(r.contracts.troveManager);
         burners[1] = address(r.collateralRegistry);
-        burners[2] = address(contracts.borrowerOperations);
-        burners[3] = address(contracts.stabilityPool);
+        burners[2] = address(r.contracts.borrowerOperations);
+        burners[3] = address(r.contracts.stabilityPool);
 
         address[] memory operators = new address[](1);
-        operators[0] = address(contracts.stabilityPool);
+        operators[0] = address(r.contracts.stabilityPool);
 
         r.stableToken.initialize(
             CONFIG.stableTokenName,
@@ -442,29 +420,58 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             watchdogAddress: address(0)
         });
 
-        IAddressesRegistry(contracts.addressesRegistry).initialize(deployer);
         contracts.addressesRegistry.setAddresses(addressVars);
     }
 
-    function _deployProtocolContracts(LiquityContracts memory contracts, LiquityContractAddresses memory addresses)
+    function _deployBorrowerOperations(DeploymentResult memory r) internal {
+        r.borrowerOperationsImpl = address(
+            new BorrowerOperations{salt: SALT}(true, r.contracts.addressesRegistry, r.contracts.systemParams)
+        );
+
+        r.contracts.borrowerOperations = IBorrowerOperations(
+            address(new TransparentUpgradeableProxy(r.borrowerOperationsImpl, address(r.proxyAdmin), ""))
+        );
+        r.contracts.borrowerOperations.initialize();
+    }
+
+    function _deployTroveManager(DeploymentResult memory r) internal {
+        r.troveManagerImpl = address(
+            new TroveManager{salt: SALT}(true, r.contracts.addressesRegistry, r.contracts.systemParams)
+        );
+
+        r.contracts.troveManager = ITroveManager(
+            address(new TransparentUpgradeableProxy(r.troveManagerImpl, address(r.proxyAdmin), ""))
+        );
+        r.contracts.troveManager.initialize();
+    }
+
+    function _deployActivePool(DeploymentResult memory r) internal {
+        r.activePoolImpl = address(
+            new ActivePool{salt: SALT}(true, r.contracts.addressesRegistry, r.contracts.systemParams)
+        );
+
+        r.contracts.activePool = IActivePool(
+            address(new TransparentUpgradeableProxy(r.activePoolImpl, address(r.proxyAdmin), ""))
+        );
+        r.contracts.activePool.initialize();
+    }
+
+    function _deployProtocolContracts(DeploymentResult memory r, LiquityContractAddresses memory addresses)
         internal
     {
-        // TODO: Deploy proxy then initialize
-        contracts.borrowerOperations =
-            new BorrowerOperations{salt: SALT}(false);
-        contracts.borrowerOperations.initialize(contracts.addressesRegistry, contracts.systemParams, msg.sender);
-        contracts.troveManager = new TroveManager{salt: SALT}(false, contracts.addressesRegistry, contracts.systemParams);
-        contracts.troveNFT = new TroveNFT{salt: SALT}(contracts.addressesRegistry);
-        contracts.activePool = new ActivePool{salt: SALT}(contracts.addressesRegistry, contracts.systemParams);
-        contracts.gasPool = new GasPool{salt: SALT}(contracts.addressesRegistry);
-        contracts.sortedTroves = new SortedTroves{salt: SALT}(contracts.addressesRegistry);
+        _deployBorrowerOperations(r);
+        _deployTroveManager(r);
+        r.contracts.troveNFT = new TroveNFT{salt: SALT}(r.contracts.addressesRegistry);
+        _deployActivePool(r);
+        r.contracts.gasPool = new GasPool{salt: SALT}(r.contracts.addressesRegistry);
+        r.contracts.sortedTroves = new SortedTroves{salt: SALT}(r.contracts.addressesRegistry);
 
-        assert(address(contracts.borrowerOperations) == addresses.borrowerOperations);
-        assert(address(contracts.troveManager) == addresses.troveManager);
-        assert(address(contracts.troveNFT) == addresses.troveNFT);
-        assert(address(contracts.activePool) == addresses.activePool);
-        assert(address(contracts.gasPool) == addresses.gasPool);
-        assert(address(contracts.sortedTroves) == addresses.sortedTroves);
+        assert(address(r.contracts.borrowerOperations) == addresses.borrowerOperations);
+        assert(address(r.contracts.troveManager) == addresses.troveManager);
+        assert(address(r.contracts.troveNFT) == addresses.troveNFT);
+        assert(address(r.contracts.activePool) == addresses.activePool);
+        assert(address(r.contracts.gasPool) == addresses.gasPool);
+        assert(address(r.contracts.sortedTroves) == addresses.sortedTroves);
     }
 
     function _computeCreate2Address(bytes memory creationCode, address _addressesRegistry)
@@ -543,11 +550,11 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         );
 
         string memory part2 = string.concat(
-            string.concat('"stableTokenV3Impl":"', address(deployed.stableTokenV3Impl).toHexString(), '",'),
-            string.concat('"stabilityPoolImpl":"', address(deployed.stabilityPoolImpl).toHexString(), '",'),
-            string.concat('"collSurplusPoolImpl":"', address(deployed.collSurplusPoolImpl).toHexString(), '",'),
-            string.concat('"defaultPoolImpl":"', address(deployed.defaultPoolImpl).toHexString(), '",'),
-            string.concat('"systemParamsImpl":"', address(deployed.systemParamsImpl).toHexString(), '",'),
+            string.concat('"stableTokenV3Impl":"', deployed.stableTokenV3Impl.toHexString(), '",'),
+            string.concat('"stabilityPoolImpl":"', deployed.stabilityPoolImpl.toHexString(), '",'),
+            string.concat('"collSurplusPoolImpl":"', deployed.collSurplusPoolImpl.toHexString(), '",'),
+            string.concat('"defaultPoolImpl":"', deployed.defaultPoolImpl.toHexString(), '",'),
+            string.concat('"systemParamsImpl":"', deployed.systemParamsImpl.toHexString(), '",'),
             string.concat('"systemParams":"', address(deployed.systemParams).toHexString(), '",'),
             string.concat('"multiTroveGetter":"', address(deployed.multiTroveGetter).toHexString(), '",')
         );

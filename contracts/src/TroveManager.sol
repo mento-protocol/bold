@@ -195,7 +195,7 @@ contract TroveManager is LiquityBaseInit, ITroveManager, ITroveEvents {
     event SortedTrovesAddressChanged(address _sortedTrovesAddress);
     event CollateralRegistryAddressChanged(address _collateralRegistryAddress);
 
-    constructor(bool disableInitializers, IAddressesRegistry _addressesRegistry, ISystemParams _systemParams) {
+    constructor(bool disableInitializers, IAddressesRegistry _addressesRegistry, ISystemParams _systemParams) LiquityBaseInit(_addressesRegistry){
         if (disableInitializers) {
             _disableInitializers();
         }
@@ -229,8 +229,8 @@ contract TroveManager is LiquityBaseInit, ITroveManager, ITroveEvents {
      * Configuration addresses are immutable from constructor. This function
      * initializes LiquityBase and emits events for indexing.
      */
-    function initialize(IAddressesRegistry _addressesRegistry) external initializer {
-        __LiquityBase_init(_addressesRegistry);
+    function initialize() external initializer {
+        __LiquityBase_init();
 
         emit TroveNFTAddressChanged(address(troveNFT));
         emit BorrowerOperationsAddressChanged(address(borrowerOperations));

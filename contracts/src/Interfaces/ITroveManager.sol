@@ -170,7 +170,7 @@ interface ITroveManager is ILiquityBase {
         uint256 _newAnnualInterestRate
     ) external;
 
-    function initialize(IAddressesRegistry _addressesRegistry) external;
+    function initialize() external;
 
     // -- end of permissioned functions --
 }

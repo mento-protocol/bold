@@ -3,6 +3,7 @@
 pragma solidity ^0.8.0;
 
 interface IHintHelpers {
+    function initialize() external;
     function getApproxHint(uint256 _collIndex, uint256 _interestRate, uint256 _numTrials, uint256 _inputRandomSeed)
         external
         view

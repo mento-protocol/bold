@@ -4,7 +4,7 @@ pragma solidity 0.8.24;
 
 import "src/AddressesRegistry.sol";
 import "src/ActivePool.sol";
-import "src/BoldToken.sol";
+import { BoldToken } from "src/BoldToken.sol";
 import "src/BorrowerOperations.sol";
 import "src/CollSurplusPool.sol";
 import "src/DefaultPool.sol";
@@ -31,13 +31,13 @@ import "src/PriceFeeds/WETHPriceFeed.sol";
 import "src/PriceFeeds/WSTETHPriceFeed.sol";
 import "src/PriceFeeds/RETHPriceFeed.sol";
 
-import "forge-std/console2.sol";
+import "forge-std/StdAssertions.sol";
 
 uint256 constant _24_HOURS = 86400;
 uint256 constant _48_HOURS = 172800;
 
 // TODO: Split dev and mainnet
-contract TestDeployer is MetadataDeployment {
+contract TestDeployer is MetadataDeployment, StdAssertions {
     IERC20 constant USDC = IERC20(0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48);
     IWETH constant WETH_MAINNET = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
 
@@ -271,12 +271,12 @@ contract TestDeployer is MetadataDeployment {
     {
         DeploymentVarsDev memory vars;
         vars.numCollaterals = troveManagerParamsArray.length;
-        
+
         // Deploy Bold
         vars.bytecode = abi.encodePacked(type(BoldToken).creationCode, abi.encode(address(this)));
         vars.boldTokenAddress = getAddress(address(this), vars.bytecode, SALT);
         boldToken = new BoldToken{salt: SALT}(address(this));
-        assert(address(boldToken) == vars.boldTokenAddress);
+        assertTrue(address(boldToken) == vars.boldTokenAddress, "BoldToken deployed to an unexpected address");
 
         contractsArray = new LiquityContractsDev[](vars.numCollaterals);
         vars.collaterals = new IERC20Metadata[](vars.numCollaterals);
@@ -284,7 +284,7 @@ contract TestDeployer is MetadataDeployment {
         vars.troveManagers = new ITroveManager[](vars.numCollaterals);
 
         ISystemParams[] memory systemParamsArray = new ISystemParams[](vars.numCollaterals);
-        
+
         for (vars.i = 0; vars.i < vars.numCollaterals; vars.i++) {
             systemParamsArray[vars.i] = deploySystemParamsDev(troveManagerParamsArray[vars.i], vars.i);
         }
@@ -309,8 +309,9 @@ contract TestDeployer is MetadataDeployment {
             vars.troveManagers[vars.i] = ITroveManager(troveManagerAddress);
         }
 
-        collateralRegistry = new CollateralRegistry(boldToken, vars.collaterals, vars.troveManagers, systemParamsArray[0]);
-        hintHelpers = new HintHelpers(collateralRegistry, systemParamsArray[0]);
+        collateralRegistry = new CollateralRegistry(false, boldToken, vars.collaterals, vars.troveManagers, systemParamsArray[0]);
+        collateralRegistry.initialize();
+        hintHelpers = new HintHelpers(false, collateralRegistry, systemParamsArray[0]);
         multiTroveGetter = new MultiTroveGetter(collateralRegistry);
 
         contractsArray[0] = _deployAndConnectCollateralContractsDev(
@@ -347,8 +348,7 @@ contract TestDeployer is MetadataDeployment {
         internal
         returns (IAddressesRegistry, address)
     {
-        IAddressesRegistry addressesRegistry = new AddressesRegistry(false);
-        addressesRegistry.initialize(address(this));
+        IAddressesRegistry addressesRegistry = new AddressesRegistry(address(this));
 
         address troveManagerAddress = getAddress(address(this), getBytecode(type(TroveManagerTester).creationCode, bool(false), address(addressesRegistry), address(_systemParams)), SALT);
 
@@ -438,7 +438,7 @@ contract TestDeployer is MetadataDeployment {
         addresses.metadataNFT = getAddress(
             address(this), getBytecode(type(MetadataNFT).creationCode, address(initializedFixedAssetReader)), SALT
         );
-        assert(address(metadataNFT) == addresses.metadataNFT);
+        assertTrue(address(metadataNFT) == addresses.metadataNFT, "MetadataNFT deployed to an unexpected address");
 
         // Pre-calc addresses
         addresses.borrowerOperations = getAddress(
@@ -452,9 +452,9 @@ contract TestDeployer is MetadataDeployment {
         );
         bytes32 stabilityPoolSalt = keccak256(abi.encodePacked(address(contracts.addressesRegistry)));
         addresses.stabilityPool =
-            getAddress(address(this), getBytecode(type(StabilityPool).creationCode, bool(false)), stabilityPoolSalt);
+            getAddress(address(this), getBytecode(type(StabilityPool).creationCode, false, address(contracts.addressesRegistry), address(contracts.systemParams)), stabilityPoolSalt);
         addresses.activePool = getAddress(
-            address(this), getBytecode(type(ActivePool).creationCode, address(contracts.addressesRegistry), address(_systemParams)), SALT
+            address(this), getBytecode(type(ActivePool).creationCode, false, address(contracts.addressesRegistry), address(_systemParams)), SALT
         );
         addresses.defaultPool = getAddress(
             address(this), getBytecode(type(DefaultPool).creationCode, bool(false), address(contracts.addressesRegistry)), SALT
@@ -497,27 +497,30 @@ contract TestDeployer is MetadataDeployment {
         contracts.addressesRegistry.setAddresses(addressVars);
 
         contracts.borrowerOperations = new BorrowerOperationsTester{salt: SALT}(contracts.addressesRegistry, _systemParams);
+        contracts.borrowerOperations.initialize();
         contracts.troveManager = new TroveManagerTester{salt: SALT}(false, contracts.addressesRegistry, _systemParams);
         contracts.troveNFT = new TroveNFT{salt: SALT}(contracts.addressesRegistry);
-        contracts.stabilityPool = new StabilityPool{salt: stabilityPoolSalt}(false);
-        contracts.activePool = new ActivePool{salt: SALT}(contracts.addressesRegistry, _systemParams);
+        contracts.stabilityPool = new StabilityPool{salt: stabilityPoolSalt}(false, contracts.addressesRegistry, contracts.systemParams);
+        contracts.activePool = new ActivePool{salt: SALT}(false, contracts.addressesRegistry, _systemParams);
         contracts.pools.defaultPool = new DefaultPool{salt: SALT}(false, contracts.addressesRegistry);
+        // TODO: Deploy proxy and initializectivePool{salt: SALT}(false, contracts.addressesRegistry, _systemParams);
+        contracts.activePool.initialize();
         contracts.pools.gasPool = new GasPool{salt: SALT}(contracts.addressesRegistry);
         contracts.pools.collSurplusPool = new CollSurplusPool{salt: SALT}(false, contracts.addressesRegistry);
         contracts.sortedTroves = new SortedTroves{salt: SALT}(contracts.addressesRegistry);
 
-        assert(address(contracts.borrowerOperations) == addresses.borrowerOperations);
-        assert(address(contracts.troveManager) == addresses.troveManager);
-        assert(address(contracts.troveNFT) == addresses.troveNFT);
-        assert(address(contracts.stabilityPool) == addresses.stabilityPool);
-        assert(address(contracts.activePool) == addresses.activePool);
-        assert(address(contracts.pools.defaultPool) == addresses.defaultPool);
-        assert(address(contracts.pools.gasPool) == addresses.gasPool);
-        assert(address(contracts.pools.collSurplusPool) == addresses.collSurplusPool);
-        assert(address(contracts.sortedTroves) == addresses.sortedTroves);
+        assertTrue(address(contracts.borrowerOperations) == addresses.borrowerOperations, "BorrowerOperations deployed to an unexpected address");
+        assertTrue(address(contracts.troveManager) == addresses.troveManager, "TroveManager deployed to an unexpected address");
+        assertTrue(address(contracts.troveNFT) == addresses.troveNFT, "TroveNFT deployed to an unexpected address");
+        assertTrue(address(contracts.stabilityPool) == addresses.stabilityPool, "StabilityPool deployed to an unexpected address");
+        assertTrue(address(contracts.activePool) == addresses.activePool, "ActivePool deployed to an unexpected address");
+        assertTrue(address(contracts.pools.defaultPool) == addresses.defaultPool, "DefaultPool deployed to an unexpected address");
+        assertTrue(address(contracts.pools.gasPool) == addresses.gasPool, "GasPool deployed to an unexpected address");
+        assertTrue(address(contracts.pools.collSurplusPool) == addresses.collSurplusPool, "CollSurplusPool deployed to an unexpected address");
+        assertTrue(address(contracts.sortedTroves) == addresses.sortedTroves, "SortedTroves deployed to an unexpected address");
 
-        contracts.stabilityPool.initialize(contracts.addressesRegistry, _systemParams);
-        contracts.troveManager.initialize(contracts.addressesRegistry);
+        contracts.stabilityPool.initialize();
+        contracts.troveManager.initialize();
         contracts.pools.defaultPool.initialize();
         contracts.pools.collSurplusPool.initialize();
 
@@ -566,7 +569,7 @@ contract TestDeployer is MetadataDeployment {
         vars.bytecode = abi.encodePacked(type(BoldToken).creationCode, abi.encode(address(this)));
         vars.boldTokenAddress = getAddress(address(this), vars.bytecode, SALT);
         result.boldToken = new BoldToken{salt: SALT}(address(this));
-        assert(address(result.boldToken) == vars.boldTokenAddress);
+        assertTrue(address(result.boldToken) == vars.boldTokenAddress, "BoldToken deployed to an unexpected address");
 
         // WETH
         IWETH WETH = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
@@ -590,7 +593,9 @@ contract TestDeployer is MetadataDeployment {
         // Deploy registry and register the TMs
         result.collateralRegistry = new CollateralRegistryTester(result.boldToken, vars.collaterals, vars.troveManagers, result.systemParams);
 
-        result.hintHelpers = new HintHelpers(result.collateralRegistry, result.systemParams);
+        // TODO: Deploy proxy then initialize
+        result.hintHelpers = new HintHelpers(false, result.collateralRegistry, result.systemParams);
+        result.hintHelpers.initialize();
         result.multiTroveGetter = new MultiTroveGetter(result.collateralRegistry);
 
         // Deploy each set of core contracts
@@ -616,9 +621,8 @@ contract TestDeployer is MetadataDeployment {
         internal
         returns (IAddressesRegistry, address)
     {
-         IAddressesRegistry addressesRegistry = new AddressesRegistry(false);
-        addressesRegistry.initialize(address(this));
-    
+         IAddressesRegistry addressesRegistry = new AddressesRegistry(address(this));
+
         address troveManagerAddress = getAddress(
             address(this), getBytecode(type(TroveManagerTester).creationCode, address(addressesRegistry), address(_systemParams)), SALT
         );
@@ -644,7 +648,7 @@ contract TestDeployer is MetadataDeployment {
         addresses.metadataNFT = getAddress(
             address(this), getBytecode(type(MetadataNFT).creationCode, address(initializedFixedAssetReader)), SALT
         );
-        assert(address(metadataNFT) == addresses.metadataNFT);
+        assertTrue(address(metadataNFT) == addresses.metadataNFT, "MetadataNFT deployed to an unexpected address");
 
         // Pre-calc addresses
         bytes32 stabilityPoolSalt = keccak256(abi.encodePacked(address(contracts.addressesRegistry)));
@@ -658,7 +662,7 @@ contract TestDeployer is MetadataDeployment {
             address(this), getBytecode(type(TroveNFT).creationCode, address(contracts.addressesRegistry)), SALT
         );
         addresses.stabilityPool =
-            getAddress(address(this), getBytecode(type(StabilityPool).creationCode, false), stabilityPoolSalt);
+            getAddress(address(this), getBytecode(type(StabilityPool).creationCode, false, address(contracts.addressesRegistry), address(contracts.systemParams)), stabilityPoolSalt);
         addresses.activePool = getAddress(
             address(this), getBytecode(type(ActivePool).creationCode, address(contracts.addressesRegistry), address(_systemParams)), SALT
         );
@@ -708,25 +712,28 @@ contract TestDeployer is MetadataDeployment {
         contracts.borrowerOperations = new BorrowerOperationsTester{salt: SALT}(contracts.addressesRegistry, _systemParams);
         contracts.troveManager = new TroveManager{salt: SALT}(false, contracts.addressesRegistry, _systemParams);
         contracts.troveNFT = new TroveNFT{salt: SALT}(contracts.addressesRegistry);
-        contracts.stabilityPool = new StabilityPool{salt: stabilityPoolSalt}(false);
-        contracts.activePool = new ActivePool{salt: SALT}(contracts.addressesRegistry, _systemParams);
+        contracts.stabilityPool = new StabilityPool{salt: stabilityPoolSalt}(false, contracts.addressesRegistry, contracts.systemParams);
+        contracts.activePool = new ActivePool{salt: SALT}(false, contracts.addressesRegistry, _systemParams);
+        contracts.defaultPool = new DefaultPool{salt: SALT}(false, contracts.addressesRegistry);
+        contracts.stabilityPool.initialize();
+        contracts.activePool.initialize();
         contracts.defaultPool = new DefaultPool{salt: SALT}(false, contracts.addressesRegistry);
         contracts.gasPool = new GasPool{salt: SALT}(contracts.addressesRegistry);
         contracts.collSurplusPool = new CollSurplusPool{salt: SALT}(false, contracts.addressesRegistry);
         contracts.sortedTroves = new SortedTroves{salt: SALT}(contracts.addressesRegistry);
 
-        assert(address(contracts.borrowerOperations) == addresses.borrowerOperations);
-        assert(address(contracts.troveManager) == addresses.troveManager);
-        assert(address(contracts.troveNFT) == addresses.troveNFT);
-        assert(address(contracts.stabilityPool) == addresses.stabilityPool);
-        assert(address(contracts.activePool) == addresses.activePool);
-        assert(address(contracts.defaultPool) == addresses.defaultPool);
-        assert(address(contracts.gasPool) == addresses.gasPool);
-        assert(address(contracts.collSurplusPool) == addresses.collSurplusPool);
-        assert(address(contracts.sortedTroves) == addresses.sortedTroves);
+        assertTrue(address(contracts.borrowerOperations) == addresses.borrowerOperations, "BorrowerOperations deployed to an unexpected address");
+        assertTrue(address(contracts.troveManager) == addresses.troveManager, "TroveManager deployed to an unexpected address");
+        assertTrue(address(contracts.troveNFT) == addresses.troveNFT, "TroveNFT deployed to an unexpected address");
+        assertTrue(address(contracts.stabilityPool) == addresses.stabilityPool, "StabilityPool deployed to an unexpected address");
+        assertTrue(address(contracts.activePool) == addresses.activePool, "ActivePool deployed to an unexpected address");
+        assertTrue(address(contracts.defaultPool) == addresses.defaultPool, "DefaultPool deployed to an unexpected address");
+        assertTrue(address(contracts.gasPool) == addresses.gasPool, "GasPool deployed to an unexpected address");
+        assertTrue(address(contracts.collSurplusPool) == addresses.collSurplusPool, "CollSurplusPool deployed to an unexpected address");
+        assertTrue(address(contracts.sortedTroves) == addresses.sortedTroves, "SortedTroves deployed to an unexpected address");
 
-        contracts.stabilityPool.initialize(contracts.addressesRegistry, _systemParams);
-        contracts.troveManager.initialize(contracts.addressesRegistry);
+        contracts.stabilityPool.initialize();
+        contracts.troveManager.initialize();
         contracts.defaultPool.initialize();
         contracts.collSurplusPool.initialize();
 

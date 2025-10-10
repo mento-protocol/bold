@@ -7,6 +7,7 @@ import "./IBoldRewardsReceiver.sol";
 import "../Types/TroveChange.sol";
 
 interface IActivePool {
+    function initialize() external;
     function defaultPoolAddress() external view returns (address);
     function borrowerOperationsAddress() external view returns (address);
     function troveManagerAddress() external view returns (address);
