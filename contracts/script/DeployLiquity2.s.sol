@@ -119,6 +119,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         address addressesRegistryImpl;
         address collSurplusPoolImpl;
         address defaultPoolImpl;
+        address systemParamsImpl;
         address fpmm;
     }
 
@@ -223,6 +224,8 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         r.stabilityPoolImpl = address(new StabilityPool{salt: SALT}(true));
         r.addressesRegistryImpl = address(new AddressesRegistry{salt: SALT}(true));
 
+        _deploySystemParamsImpl(r);
+
         assert(
             address(r.stableTokenV3Impl)
                 == vm.computeCreate2Address(
@@ -273,7 +276,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         );
     }
 
-    function _deploySystemParams(DeploymentResult memory r) internal {
+    function _deploySystemParamsImpl(DeploymentResult memory r) internal {
         ISystemParams.DebtParams memory debtParams = ISystemParams.DebtParams({minDebt: 2000e18});
 
         ISystemParams.LiquidationParams memory liquidationParams =
@@ -302,19 +305,27 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         ISystemParams.StabilityPoolParams memory poolParams =
             ISystemParams.StabilityPoolParams({spYieldSplit: 75 * (1e18 / 100), minBoldInSP: 1e18});
 
-        r.systemParams = ISystemParams(
-            address(
-                new SystemParams{salt: SALT}(
-                    debtParams,
-                    liquidationParams,
-                    gasCompParams,
-                    collateralParams,
-                    interestParams,
-                    redemptionParams,
-                    poolParams
-                )
+        r.systemParamsImpl = address(
+            new SystemParams{salt: SALT}(
+                true, // disableInitializers for implementation
+                debtParams,
+                liquidationParams,
+                gasCompParams,
+                collateralParams,
+                interestParams,
+                redemptionParams,
+                poolParams
             )
         );
+    }
+
+    function _deploySystemParams(DeploymentResult memory r) internal {
+        address systemParamsProxy = address(
+            new TransparentUpgradeableProxy(address(r.systemParamsImpl), address(r.proxyAdmin), "")
+        );
+
+        r.systemParams = ISystemParams(systemParamsProxy);
+        r.systemParams.initialize();
     }
 
     function _deployAndConnectCollateralContracts(
@@ -536,6 +547,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             string.concat('"stabilityPoolImpl":"', address(deployed.stabilityPoolImpl).toHexString(), '",'),
             string.concat('"collSurplusPoolImpl":"', address(deployed.collSurplusPoolImpl).toHexString(), '",'),
             string.concat('"defaultPoolImpl":"', address(deployed.defaultPoolImpl).toHexString(), '",'),
+            string.concat('"systemParamsImpl":"', address(deployed.systemParamsImpl).toHexString(), '",'),
             string.concat('"systemParams":"', address(deployed.systemParams).toHexString(), '",'),
             string.concat('"multiTroveGetter":"', address(deployed.multiTroveGetter).toHexString(), '",')
         );

@@ -398,6 +398,7 @@ contract TestDeployer is MetadataDeployment {
         });
 
         SystemParams systemParams = new SystemParams{salt: uniqueSalt}(
+            false,
             debtParams,
             liquidationParams,
             gasCompParams,
@@ -406,6 +407,8 @@ contract TestDeployer is MetadataDeployment {
             redemptionParams,
             poolParams
         );
+
+        systemParams.initialize();
 
         return ISystemParams(systemParams);
     }
