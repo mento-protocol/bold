@@ -13,4 +13,6 @@ interface IDefaultPool {
 
     function increaseBoldDebt(uint256 _amount) external;
     function decreaseBoldDebt(uint256 _amount) external;
+
+    function initialize() external;
 }

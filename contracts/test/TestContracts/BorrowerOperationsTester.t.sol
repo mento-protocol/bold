@@ -10,7 +10,7 @@ import "./Interfaces/IBorrowerOperationsTester.sol";
 /* Tester contract inherits from BorrowerOperations, and provides external functions
 for testing the parent's internal functions. */
 contract BorrowerOperationsTester is BorrowerOperations, IBorrowerOperationsTester {
-    constructor(IAddressesRegistry _addressesRegistry, ISystemParams _systemParams) BorrowerOperations(_addressesRegistry, _systemParams) {}
+    constructor(IAddressesRegistry _addressesRegistry, ISystemParams _systemParams) BorrowerOperations(false, _addressesRegistry, _systemParams) {}
 
     function get_CCR() external view returns (uint256) {
         return CCR;

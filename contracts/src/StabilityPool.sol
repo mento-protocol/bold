@@ -116,14 +116,14 @@ import "./Dependencies/LiquityBaseInit.sol";
  *
  *
  */
-contract StabilityPool is Initializable, LiquityBaseInit, IStabilityPool, IStabilityPoolEvents {
+contract StabilityPool is LiquityBaseInit, IStabilityPool, IStabilityPoolEvents {
     using SafeERC20 for IERC20;
 
     string public constant NAME = "StabilityPool";
 
-    IERC20 public collToken;
-    ITroveManager public troveManager;
-    IBoldToken public boldToken;
+    IERC20 public immutable collToken;
+    ITroveManager public immutable troveManager;
+    IBoldToken public immutable boldToken;
 
     uint256 internal collBalance; // deposited coll tracker
 
@@ -180,7 +180,7 @@ contract StabilityPool is Initializable, LiquityBaseInit, IStabilityPool, IStabi
     // Each time the scale of P shifts by SCALE_FACTOR, the scale is incremented by 1
     uint256 public currentScale;
 
-    uint256 public MIN_BOLD_IN_SP;
+    uint256 public immutable MIN_BOLD_IN_SP;
 
     address public liquidityStrategy;
 
@@ -203,14 +203,10 @@ contract StabilityPool is Initializable, LiquityBaseInit, IStabilityPool, IStabi
      * Call this with disable=false during testing, when used without a proxy.
      */
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor(bool disable) {
+    constructor(bool disable, IAddressesRegistry _addressesRegistry, ISystemParams _systemParams) LiquityBaseInit(_addressesRegistry) {
         if (disable) {
             _disableInitializers();
         }
-    }
-
-    function initialize(IAddressesRegistry _addressesRegistry, ISystemParams _systemParams) external initializer {
-        __LiquityBase_init(_addressesRegistry);
 
         collToken = _addressesRegistry.collToken();
         troveManager = _addressesRegistry.troveManager();
@@ -218,6 +214,10 @@ contract StabilityPool is Initializable, LiquityBaseInit, IStabilityPool, IStabi
         liquidityStrategy = _addressesRegistry.liquidityStrategy();
 
         MIN_BOLD_IN_SP = _systemParams.MIN_BOLD_IN_SP();
+    }
+
+    function initialize() external initializer {
+        __LiquityBase_init();
 
         emit TroveManagerAddressChanged(address(troveManager));
         emit BoldTokenAddressChanged(address(boldToken));

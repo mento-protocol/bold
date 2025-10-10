@@ -3,6 +3,7 @@
 pragma solidity 0.8.24;
 
 import "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
 
 import "./Interfaces/ITroveManager.sol";
 import "./Interfaces/IBoldToken.sol";
@@ -12,7 +13,7 @@ import "./Dependencies/LiquityMath.sol";
 
 import "./Interfaces/ICollateralRegistry.sol";
 
-contract CollateralRegistry is ICollateralRegistry {
+contract CollateralRegistry is Initializable, ICollateralRegistry {
     // See: https://github.com/ethereum/solidity/issues/12587
     uint256 public immutable totalCollaterals;
     address public immutable systemParamsAddress;
@@ -53,7 +54,16 @@ contract CollateralRegistry is ICollateralRegistry {
     event BaseRateUpdated(uint256 _baseRate);
     event LastFeeOpTimeUpdated(uint256 _lastFeeOpTime);
 
-    constructor(IBoldToken _boldToken, IERC20Metadata[] memory _tokens, ITroveManager[] memory _troveManagers, ISystemParams _systemParams) {
+    constructor(
+      bool disableInitializers,
+      IBoldToken _boldToken,
+      IERC20Metadata[] memory _tokens,
+      ITroveManager[] memory _troveManagers,
+      ISystemParams _systemParams
+    ) {
+        if (disableInitializers) {
+            _disableInitializers();
+        }
         uint256 numTokens = _tokens.length;
         require(numTokens > 0, "Collateral list cannot be empty");
         require(numTokens <= 10, "Collateral list too long");
@@ -87,10 +97,13 @@ contract CollateralRegistry is ICollateralRegistry {
         REDEMPTION_BETA = _systemParams.REDEMPTION_BETA();
         REDEMPTION_MINUTE_DECAY_FACTOR = _systemParams.REDEMPTION_MINUTE_DECAY_FACTOR();
         REDEMPTION_FEE_FLOOR = _systemParams.REDEMPTION_FEE_FLOOR();
+    }
 
+    function initialize() public initializer {
         // Initialize the baseRate state variable
-        baseRate = _systemParams.INITIAL_BASE_RATE();
-        emit BaseRateUpdated(_systemParams.INITIAL_BASE_RATE());
+        uint256 _baseRate = ISystemParams(systemParamsAddress).INITIAL_BASE_RATE();
+        baseRate = _baseRate;
+        emit BaseRateUpdated(_baseRate);
     }
 
     struct RedemptionTotals {

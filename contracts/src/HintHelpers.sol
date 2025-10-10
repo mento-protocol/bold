@@ -2,6 +2,7 @@
 
 pragma solidity 0.8.24;
 
+import "openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
 import "./Interfaces/ICollateralRegistry.sol";
 import "./Interfaces/IActivePool.sol";
 import "./Interfaces/ISortedTroves.sol";
@@ -13,16 +14,21 @@ import "./Types/LatestTroveData.sol";
 import "./Types/TroveChange.sol";
 import "./Types/LatestBatchData.sol";
 
-contract HintHelpers is IHintHelpers {
+contract HintHelpers is Initializable, IHintHelpers {
     string public constant NAME = "HintHelpers";
 
     ICollateralRegistry public immutable collateralRegistry;
     address public immutable systemParamsAddress;
 
-    constructor(ICollateralRegistry _collateralRegistry, ISystemParams _systemParams) {
+    constructor(bool disableInitializers, ICollateralRegistry _collateralRegistry, ISystemParams _systemParams) {
+        if (disableInitializers) {
+            _disableInitializers();
+        }
         systemParamsAddress = address(_systemParams);
         collateralRegistry = _collateralRegistry;
     }
+
+    function initialize() external initializer {}
 
     /* getApproxHint() - return id of a Trove that is, on average, (length / numTrials) positions away in the
     sortedTroves list from the correct insert position of the Trove to be inserted. 

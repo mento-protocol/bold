@@ -3,11 +3,12 @@
 pragma solidity 0.8.24;
 
 import "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
+import "openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
 
 import "./Interfaces/ICollSurplusPool.sol";
 import "./Interfaces/IAddressesRegistry.sol";
 
-contract CollSurplusPool is ICollSurplusPool {
+contract CollSurplusPool is Initializable, ICollSurplusPool {
     using SafeERC20 for IERC20;
 
     string public constant NAME = "CollSurplusPool";
@@ -29,11 +30,22 @@ contract CollSurplusPool is ICollSurplusPool {
     event CollBalanceUpdated(address indexed _account, uint256 _newBalance);
     event CollSent(address indexed _to, uint256 _amount);
 
-    constructor(IAddressesRegistry _addressesRegistry) {
+    constructor(bool disableInitializers, IAddressesRegistry _addressesRegistry) {
+        if (disableInitializers) {
+            _disableInitializers();
+        }
+
         collToken = _addressesRegistry.collToken();
         borrowerOperationsAddress = address(_addressesRegistry.borrowerOperations());
         troveManagerAddress = address(_addressesRegistry.troveManager());
-
+    }
+    
+    /*
+     * Initializes proxy storage and emits configuration events
+     * Configuration addresses are immutable from constructor. This function
+     * only marks initialization complete and emits events for indexing.
+     */
+    function initialize() external initializer {
         emit BorrowerOperationsAddressChanged(borrowerOperationsAddress);
         emit TroveManagerAddressChanged(troveManagerAddress);
     }

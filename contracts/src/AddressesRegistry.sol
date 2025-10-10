@@ -2,8 +2,8 @@
 
 pragma solidity 0.8.24;
 
-import "./Dependencies/Ownable.sol";
 import "./Interfaces/IAddressesRegistry.sol";
+import "openzeppelin-contracts/contracts/access/Ownable.sol";
 
 contract AddressesRegistry is Ownable, IAddressesRegistry {
     IERC20Metadata public collToken;
@@ -48,7 +48,9 @@ contract AddressesRegistry is Ownable, IAddressesRegistry {
     event LiquidityStrategyAddressChanged(address _liquidityStrategyAddress);
     event WatchdogAddressChanged(address _watchdogAddress);
 
-    constructor(address _owner) Ownable(_owner) {}
+    constructor(address _owner) {
+        _transferOwnership(_owner);
+    }
 
     function setAddresses(AddressVars memory _vars) external onlyOwner {
         collToken = _vars.collToken;
@@ -96,7 +98,5 @@ contract AddressesRegistry is Ownable, IAddressesRegistry {
         emit GasTokenAddressChanged(address(_vars.gasToken));
         emit LiquidityStrategyAddressChanged(address(_vars.liquidityStrategy));
         emit WatchdogAddressChanged(address(_vars.watchdogAddress));
-
-        _renounceOwnership();
     }
 }

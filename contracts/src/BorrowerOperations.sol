@@ -11,10 +11,12 @@ import "./Interfaces/IBoldToken.sol";
 import "./Interfaces/ICollSurplusPool.sol";
 import "./Interfaces/ISortedTroves.sol";
 import "./Interfaces/ISystemParams.sol";
-import "./Dependencies/LiquityBase.sol";
-import "./Dependencies/AddRemoveManagers.sol";
+import "./Dependencies/LiquityMath.sol";
+import { AddRemoveManagersInit } from "./Dependencies/AddRemoveManagersInit.sol";
+import "./Dependencies/Constants.sol";
 import "./Types/LatestTroveData.sol";
 import "./Types/LatestBatchData.sol";
+import { LiquityBaseInit } from "./Dependencies/LiquityBaseInit.sol";
 
 /**
  * @dev System parameters pattern:
@@ -23,8 +25,8 @@ import "./Types/LatestBatchData.sol";
  * - SCR: Only used in shutdown() function
  */
 contract BorrowerOperations is
-    LiquityBase,
-    AddRemoveManagers,
+    LiquityBaseInit,
+    AddRemoveManagersInit,
     IBorrowerOperations
 {
     using SafeERC20 for IERC20;
@@ -32,20 +34,22 @@ contract BorrowerOperations is
     // --- Connected contract declarations ---
 
     IERC20 internal immutable collToken;
-    ITroveManager internal troveManager;
-    address internal gasPoolAddress;
-    ICollSurplusPool internal collSurplusPool;
-    IBoldToken internal boldToken;
+    IBoldToken internal immutable boldToken;
+
+    ITroveManager internal immutable troveManager;
+    address internal immutable gasPoolAddress;
+    ICollSurplusPool internal immutable collSurplusPool;
     // A doubly linked list of Troves, sorted by their collateral ratios
-    ISortedTroves internal sortedTroves;
+    ISortedTroves internal immutable sortedTroves;
     // Wrapped ETH for liquidation reserve (gas compensation)
     IERC20Metadata internal immutable gasToken;
     ISystemParams internal immutable systemParams;
 
     // Critical system collateral ratio. If the system's total collateral ratio (TCR) falls below the CCR, some borrowing operation restrictions are applied
     uint256 public immutable CCR;
-
-    bool public hasBeenShutDown;
+    // Shutdown system collateral ratio. If the system's total collateral ratio (TCR) for a given collateral falls below the SCR,
+    // the protocol triggers the shutdown of the borrow market and permanently disables all borrowing operations except for closing Troves.
+    uint256 public immutable SCR;
 
     // Minimum collateral ratio for individual troves
     uint256 public immutable MCR;
@@ -56,6 +60,8 @@ contract BorrowerOperations is
     uint256 public immutable ETH_GAS_COMPENSATION;
     uint256 public immutable MIN_DEBT;
     uint256 public immutable MIN_ANNUAL_INTEREST_RATE;
+
+    bool public hasBeenShutDown;
 
     /*
      * Mapping from TroveId to individual delegate for interest rate setting.
@@ -178,20 +184,18 @@ contract BorrowerOperations is
 
     event ShutDown(uint256 _tcr);
 
-    constructor(
-        IAddressesRegistry _addressesRegistry,
-        ISystemParams _systemParams
-    ) AddRemoveManagers(_addressesRegistry) LiquityBase(_addressesRegistry) {
+    constructor(bool disableInitializers, IAddressesRegistry _addressesRegistry, ISystemParams _systemParams) AddRemoveManagersInit(_addressesRegistry) LiquityBaseInit(_addressesRegistry) {
+        if (disableInitializers) {
+            _disableInitializers();
+        }
         // This makes impossible to open a trove with zero withdrawn Bold
         assert(_systemParams.MIN_DEBT() > 0);
 
-        systemParams = _systemParams;
-
         collToken = _addressesRegistry.collToken();
-
         gasToken = _addressesRegistry.gasToken();
 
         CCR = _systemParams.CCR();
+        SCR = _systemParams.SCR();
         MCR = _systemParams.MCR();
         BCR = _systemParams.BCR();
 
@@ -199,12 +203,17 @@ contract BorrowerOperations is
         MIN_DEBT = _systemParams.MIN_DEBT();
         MIN_ANNUAL_INTEREST_RATE = _systemParams.MIN_ANNUAL_INTEREST_RATE();
 
+        boldToken = _addressesRegistry.boldToken();
         troveManager = _addressesRegistry.troveManager();
         gasPoolAddress = _addressesRegistry.gasPoolAddress();
         collSurplusPool = _addressesRegistry.collSurplusPool();
         sortedTroves = _addressesRegistry.sortedTroves();
-        boldToken = _addressesRegistry.boldToken();
+    }
 
+    function initialize() public initializer {
+        __AddRemoveManagers_init();
+
+        // We keep the events here so that they are emitted from the right address
         emit TroveManagerAddressChanged(address(troveManager));
         emit GasPoolAddressChanged(gasPoolAddress);
         emit CollSurplusPoolAddressChanged(address(collSurplusPool));
@@ -1598,7 +1607,7 @@ contract BorrowerOperations is
 
         // Otherwise, proceed with the TCR check:
         uint256 TCR = LiquityMath._computeCR(totalColl, totalDebt, price);
-        if (TCR >= systemParams.SCR()) revert TCRNotBelowSCR();
+        if (TCR >= SCR) revert TCRNotBelowSCR();
 
         _applyShutdown();
 

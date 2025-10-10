@@ -9,26 +9,31 @@ import "../Interfaces/IActivePool.sol";
 import "../Interfaces/IDefaultPool.sol";
 import "../Interfaces/IPriceFeed.sol";
 import "../Interfaces/ILiquityBase.sol";
-import "openzeppelin-contracts/contracts/proxy/utils/Initializable.sol";
+import "openzeppelin-contracts-upgradeable/contracts/proxy/utils/Initializable.sol";
 
 /*
  * Base contract for TroveManager, BorrowerOperations and StabilityPool. Contains global system constants and
  * common functions.
  */
 contract LiquityBaseInit is Initializable, ILiquityBase {
-    IActivePool public activePool;
-    IDefaultPool internal defaultPool;
-    IPriceFeed internal priceFeed;
+    IActivePool public immutable activePool;
+    IDefaultPool internal immutable defaultPool;
+    IPriceFeed internal immutable priceFeed;
 
     event ActivePoolAddressChanged(address _newActivePoolAddress);
     event DefaultPoolAddressChanged(address _newDefaultPoolAddress);
     event PriceFeedAddressChanged(address _newPriceFeedAddress);
 
-    function __LiquityBase_init(IAddressesRegistry _addressesRegistry) internal onlyInitializing {
+    constructor(IAddressesRegistry _addressesRegistry) {
+        // New immutable address for addressesRegistry since we want to set
+        // all immutable addresses here. This way we prevent initializing with
+        // a different addresses registry
         activePool = _addressesRegistry.activePool();
         defaultPool = _addressesRegistry.defaultPool();
         priceFeed = _addressesRegistry.priceFeed();
+    }
 
+    function __LiquityBase_init() internal onlyInitializing {
         emit ActivePoolAddressChanged(address(activePool));
         emit DefaultPoolAddressChanged(address(defaultPool));
         emit PriceFeedAddressChanged(address(priceFeed));
