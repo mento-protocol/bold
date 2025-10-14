@@ -40,7 +40,7 @@ contract BorrowerOperations is
     ISortedTroves internal sortedTroves;
     // Wrapped ETH for liquidation reserve (gas compensation)
     IERC20Metadata internal immutable gasToken;
-    ISystemParams immutable systemParams;
+    ISystemParams public immutable systemParams;
 
     bool public hasBeenShutDown;
 
