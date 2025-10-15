@@ -27,7 +27,7 @@ contract MockOracleAdapter {
         denominator = _denominator;
     }
 
-    function getFXRateIfValid(address rateFeedID) external view returns (uint256, uint256) {
+    function getFXRateIfValid(address) external view returns (uint256, uint256) {
         return (numerator, denominator);
     }
 }
@@ -152,6 +152,8 @@ contract FXPriceFeedTest is Test {
     function test_initialize_whenAllParametersValid_shouldSucceed() public {
         FXPriceFeed newFeed = new FXPriceFeed(false);
 
+        mockOracleAdapter.setFXRate(5e18, 1e18);
+
         newFeed.initialize(
             address(mockOracleAdapter),
             rateFeedID,
@@ -165,6 +167,7 @@ contract FXPriceFeedTest is Test {
         assertEq(address(newFeed.borrowerOperations()), address(mockBorrowerOperations));
         assertEq(newFeed.watchdogAddress(), watchdog);
         assertEq(newFeed.owner(), owner);
+        assertEq(newFeed.lastValidPrice(), 5e18);
     }
 
     function test_initialize_whenCalledTwice_shouldRevert() public {

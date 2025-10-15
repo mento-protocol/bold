@@ -2,25 +2,11 @@
 
 pragma solidity 0.8.24;
 
+import "../Interfaces/IOracleAdapter.sol";
 import "../Interfaces/IPriceFeed.sol";
-import "../BorrowerOperations.sol";
+import "../Interfaces/IBorrowerOperations.sol";
 
 import { OwnableUpgradeable } from "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
-
-/**
- * @title IOracleAdapter
- * @notice Interface for the Oracle Adapter contract that provides FX rate data
- */
-interface IOracleAdapter {
-    /**
-     * @notice Retrieves the FX rate if it's valid
-     * @param rateFeedID The address identifier for the specific rate feed
-     * @return numerator The numerator of the FX rate fraction
-     * @return denominator The denominator of the FX rate fraction
-     */
-    function getFXRateIfValid(address rateFeedID) external view returns (uint256 numerator, uint256 denominator);
-}
-
 /**
  * @title FXPriceFeed
  * @author Mento Labs
@@ -91,20 +77,22 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
         borrowerOperations = IBorrowerOperations(_borrowerOperationsAddress);
         watchdogAddress = _watchdogAddress;
 
+        fetchPrice();
+
         _transferOwnership(_initialOwner);
     }
 
     /**
     * @notice Sets the watchdog address
-    * @param _watchdogAddress The address of the new watchdog contract
+    * @param _newWatchdogAddress The address of the new watchdog contract
     */
-    function setWatchdogAddress(address _watchdogAddress) external onlyOwner {
-        require(_watchdogAddress != address(0), "FXPriceFeed: ZERO_ADDRESS");
+    function setWatchdogAddress(address _newWatchdogAddress) external onlyOwner {
+        require(_newWatchdogAddress != address(0), "FXPriceFeed: ZERO_ADDRESS");
 
         address oldWatchdogAddress = watchdogAddress;
-        watchdogAddress = _watchdogAddress;
+        watchdogAddress = _newWatchdogAddress;
 
-        emit WatchdogAddressUpdated(oldWatchdogAddress, _watchdogAddress);
+        emit WatchdogAddressUpdated(oldWatchdogAddress, _newWatchdogAddress);
     }
 
     /**
@@ -129,7 +117,7 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
      * @dev Can only be called by the authorized watchdog address.
      *      Once shutdown:
      *      - The contract will only return the last valid price
-     *      - The BorrowerOperations contract is notified to shut down the collateral branch
+     *      - The BorrowerOperations and TroveManager contracts are notified to shut down the collateral branch
      *      - The shutdown state is permanent and cannot be reversed
      */
     function shutdown() external {

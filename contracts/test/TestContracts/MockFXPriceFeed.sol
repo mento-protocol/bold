@@ -26,7 +26,7 @@ contract MockFXPriceFeed is IMockFXPriceFeed {
         _price = price;
     }
 
-    function fetchPrice() external override returns (uint256) {
+    function fetchPrice() external view override returns (uint256) {
         require(_hasValidPrice, _revertMsg);
 
         return _price;
