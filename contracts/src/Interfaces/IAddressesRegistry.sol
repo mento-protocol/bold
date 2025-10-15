@@ -40,15 +40,7 @@ interface IAddressesRegistry {
         IERC20Metadata gasToken;
         address liquidityStrategy;
         address watchdogAddress;
-        address oracleAdapterAddress;
     }
-
-    function CCR() external returns (uint256);
-    function SCR() external returns (uint256);
-    function MCR() external returns (uint256);
-    function BCR() external returns (uint256);
-    function LIQUIDATION_PENALTY_SP() external returns (uint256);
-    function LIQUIDATION_PENALTY_REDISTRIBUTION() external returns (uint256);
 
     function collToken() external view returns (IERC20Metadata);
     function borrowerOperations() external view returns (IBorrowerOperations);
@@ -70,7 +62,6 @@ interface IAddressesRegistry {
     function gasToken() external view returns (IERC20Metadata);
     function liquidityStrategy() external view returns (address);
     function watchdogAddress() external view returns (address);
-    function oracleAdapterAddress() external view returns (address);
 
     function setAddresses(AddressVars memory _vars) external;
 }

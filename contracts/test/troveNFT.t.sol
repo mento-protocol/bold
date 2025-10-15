@@ -109,6 +109,8 @@ contract troveNFTTest is DevTestSetup {
             }
         }
 
+        systemParams = contractsArray[0].systemParams;
+        
         troveIds = new uint256[](NUM_VARIANTS);
 
         // 0 = WETH

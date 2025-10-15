@@ -29,7 +29,8 @@ abstract contract SPInvariantsBase is Assertions, BaseInvariantTest {
                 priceFeed: contracts.priceFeed,
                 stabilityPool: contracts.stabilityPool,
                 troveManager: contracts.troveManager,
-                collSurplusPool: contracts.pools.collSurplusPool
+                collSurplusPool: contracts.pools.collSurplusPool,
+                systemParams: contracts.systemParams
             }),
             hintHelpers
         );

@@ -40,6 +40,10 @@ contract ShutdownTest is DevTestSetup {
         for (uint256 c = 0; c < NUM_COLLATERALS; c++) {
             contractsArray.push(_contractsArray[c]);
         }
+        
+        // Initialize SystemParams-based variables
+        systemParams = contractsArray[0].systemParams;
+        SP_YIELD_SPLIT = systemParams.SP_YIELD_SPLIT();
         // Set price feeds
         contractsArray[0].priceFeed.setPrice(2000e18);
         contractsArray[1].priceFeed.setPrice(200e18);
@@ -74,6 +78,7 @@ contract ShutdownTest is DevTestSetup {
         borrowerOperations = contractsArray[0].borrowerOperations;
         troveManager = contractsArray[0].troveManager;
         priceFeed = contractsArray[0].priceFeed;
+        systemParams = contractsArray[0].systemParams;
         MCR = troveManager.get_MCR();
         SCR = troveManager.get_SCR();
     }
@@ -421,13 +426,13 @@ contract ShutdownTest is DevTestSetup {
 
         // Min not reached
         vm.startPrank(A);
-        vm.expectRevert(abi.encodeWithSelector(TroveManager.MinCollNotReached.selector, 102e16));
-        troveManager.urgentRedemption(1000e18, uintToArray(troveId), 103e16);
+        vm.expectRevert(abi.encodeWithSelector(TroveManager.MinCollNotReached.selector, 101e16));
+        troveManager.urgentRedemption(1000e18, uintToArray(troveId), 102e16);
         vm.stopPrank();
 
         // Min just reached
         vm.startPrank(A);
-        troveManager.urgentRedemption(1000e18, uintToArray(troveId), 102e16);
+        troveManager.urgentRedemption(1000e18, uintToArray(troveId), 101e16);
         vm.stopPrank();
     }
 

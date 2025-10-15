@@ -8,6 +8,7 @@ import "./IBoldToken.sol";
 import "./ITroveManager.sol";
 import "./IBoldRewardsReceiver.sol";
 import "./IAddressesRegistry.sol";
+import "./ISystemParams.sol";
 
 /*
  * The Stability Pool holds Bold tokens deposited by Stability Pool depositors.
