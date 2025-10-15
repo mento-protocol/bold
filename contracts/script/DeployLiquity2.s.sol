@@ -203,6 +203,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         r.hintHelpers = new HintHelpers(r.collateralRegistry, r.systemParams);
         r.multiTroveGetter = new MultiTroveGetter(r.collateralRegistry);
 
+        // TODO: replace with real price feed
         IPriceFeed priceFeed = new MockFXPriceFeed();
 
         r.contracts =
