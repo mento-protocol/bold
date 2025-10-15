@@ -445,9 +445,7 @@ contract TestDeployer is MetadataDeployment {
             collToken: _collToken,
             gasToken: _gasToken,
             // TODO: add liquidity strategy
-            liquidityStrategy: makeAddr("liquidityStrategy"),
-            // TODO: add watchdog address
-            watchdogAddress: makeAddr("watchdog")
+            liquidityStrategy: makeAddr("liquidityStrategy")
         });
         contracts.addressesRegistry.setAddresses(addressVars);
 
