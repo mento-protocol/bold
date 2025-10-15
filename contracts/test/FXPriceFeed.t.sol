@@ -87,7 +87,7 @@ contract FXPriceFeedTest is Test {
     function test_initialize_whenOracleAdapterAddressIsZero_shouldRevert() public {
         FXPriceFeed newFeed = new FXPriceFeed(false);
 
-        vm.expectRevert("FXPriceFeed: ZERO_ADDRESS");
+        vm.expectRevert(FXPriceFeed.ZeroAddress.selector);
         newFeed.initialize(
             address(0),
             rateFeedID,
@@ -100,7 +100,7 @@ contract FXPriceFeedTest is Test {
     function test_initialize_whenRateFeedIDIsZero_shouldRevert() public {
         FXPriceFeed newFeed = new FXPriceFeed(false);
 
-        vm.expectRevert("FXPriceFeed: ZERO_ADDRESS");
+        vm.expectRevert(FXPriceFeed.ZeroAddress.selector);
         newFeed.initialize(
             address(mockOracleAdapter),
             address(0),
@@ -113,7 +113,7 @@ contract FXPriceFeedTest is Test {
     function test_initialize_whenBorrowerOperationsAddressIsZero_shouldRevert() public {
         FXPriceFeed newFeed = new FXPriceFeed(false);
 
-        vm.expectRevert("FXPriceFeed: ZERO_ADDRESS");
+        vm.expectRevert(FXPriceFeed.ZeroAddress.selector);
         newFeed.initialize(
             address(mockOracleAdapter),
             rateFeedID,
@@ -126,7 +126,7 @@ contract FXPriceFeedTest is Test {
     function test_initialize_whenWatchdogAddressIsZero_shouldRevert() public {
         FXPriceFeed newFeed = new FXPriceFeed(false);
 
-        vm.expectRevert("FXPriceFeed: ZERO_ADDRESS");
+        vm.expectRevert(FXPriceFeed.ZeroAddress.selector);
         newFeed.initialize(
             address(mockOracleAdapter),
             rateFeedID,
@@ -139,7 +139,7 @@ contract FXPriceFeedTest is Test {
     function test_initialize_whenInitialOwnerIsZero_shouldRevert() public {
         FXPriceFeed newFeed = new FXPriceFeed(false);
 
-        vm.expectRevert("FXPriceFeed: ZERO_ADDRESS");
+        vm.expectRevert(FXPriceFeed.ZeroAddress.selector);
         newFeed.initialize(
             address(mockOracleAdapter),
             rateFeedID,
@@ -203,7 +203,7 @@ contract FXPriceFeedTest is Test {
 
     function test_setWatchdogAddress_whenNewAddressIsZero_shouldRevert() initialized public {
         vm.prank(owner);
-        vm.expectRevert("FXPriceFeed: ZERO_ADDRESS");
+        vm.expectRevert(FXPriceFeed.ZeroAddress.selector);
         fxPriceFeed.setWatchdogAddress(address(0));
         vm.stopPrank();
     }
@@ -247,7 +247,7 @@ contract FXPriceFeedTest is Test {
         address notWatchdog = makeAddr("notWatchdog");
 
         vm.prank(notWatchdog);
-        vm.expectRevert("FXPriceFeed: not authorized");
+        vm.expectRevert(FXPriceFeed.CallerNotWatchdog.selector);
         fxPriceFeed.shutdown();
         vm.stopPrank();
     }
@@ -269,7 +269,7 @@ contract FXPriceFeedTest is Test {
     function test_shutdown_whenAlreadyShutdown_shouldRevert() initialized public {
         vm.prank(watchdog);
         fxPriceFeed.shutdown();
-        vm.expectRevert("FXPriceFeed: already shutdown");
+        vm.expectRevert(FXPriceFeed.IsShutDown.selector);
         fxPriceFeed.shutdown();
         vm.stopPrank();
     }

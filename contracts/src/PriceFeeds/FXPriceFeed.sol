@@ -15,6 +15,8 @@ import { OwnableUpgradeable } from "openzeppelin-contracts-upgradeable/contracts
  */
 contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
 
+    /* ==================== State Variables ==================== */
+
     /// @notice The OracleAdapter contract that provides FX rate data
     IOracleAdapter public oracleAdapter;
 
@@ -32,6 +34,13 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
 
     /// @notice Whether the contract has been shutdown due to an oracle failure
     bool public isShutdown;
+
+    /// @notice Thrown when the attempting to shutdown the contract when it is already shutdown
+    error IsShutDown();
+    /// @notice Thrown when a non-watchdog address attempts to shutdown the contract
+    error CallerNotWatchdog();
+    /// @notice Thrown when a zero address is provided as a parameter
+    error ZeroAddress();
 
     /// @notice Emitted when the watchdog address is updated
     /// @param _oldWatchdogAddress The previous watchdog address
@@ -66,11 +75,11 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
         address _watchdogAddress,
         address _initialOwner
     ) external initializer {
-        require(_oracleAdapterAddress != address(0), "FXPriceFeed: ZERO_ADDRESS");
-        require(_rateFeedID != address(0), "FXPriceFeed: ZERO_ADDRESS");
-        require(_borrowerOperationsAddress != address(0), "FXPriceFeed: ZERO_ADDRESS");
-        require(_watchdogAddress != address(0), "FXPriceFeed: ZERO_ADDRESS");
-        require(_initialOwner != address(0), "FXPriceFeed: ZERO_ADDRESS");
+        if (_oracleAdapterAddress == address(0)) revert ZeroAddress();
+        if (_rateFeedID == address(0)) revert ZeroAddress();
+        if (_borrowerOperationsAddress == address(0)) revert ZeroAddress();
+        if (_watchdogAddress == address(0)) revert ZeroAddress();
+        if (_initialOwner == address(0)) revert ZeroAddress();
 
         oracleAdapter = IOracleAdapter(_oracleAdapterAddress);
         rateFeedID = _rateFeedID;
@@ -87,7 +96,7 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
     * @param _newWatchdogAddress The address of the new watchdog contract
     */
     function setWatchdogAddress(address _newWatchdogAddress) external onlyOwner {
-        require(_newWatchdogAddress != address(0), "FXPriceFeed: ZERO_ADDRESS");
+        if (_newWatchdogAddress == address(0)) revert ZeroAddress();
 
         address oldWatchdogAddress = watchdogAddress;
         watchdogAddress = _newWatchdogAddress;
@@ -121,8 +130,8 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
      *      - The shutdown state is permanent and cannot be reversed
      */
     function shutdown() external {
-        require(!isShutdown, "FXPriceFeed: already shutdown");
-        require(msg.sender == watchdogAddress, "FXPriceFeed: not authorized");
+        if (isShutdown) revert IsShutDown();
+        if (msg.sender != watchdogAddress) revert CallerNotWatchdog();
 
         isShutdown = true;
         borrowerOperations.shutdownFromOracleFailure();
