@@ -114,6 +114,7 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
             return lastValidPrice;
         }
 
+        // Denominator is always 1e18, so we only use the numerator as the price
         (uint256 price, ) = oracleAdapter.getFXRateIfValid(rateFeedID);
 
         lastValidPrice = price;
