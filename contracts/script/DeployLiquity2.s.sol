@@ -26,6 +26,7 @@ import "src/AddressesRegistry.sol";
 import "src/ActivePool.sol";
 import "src/BoldToken.sol";
 import "src/BorrowerOperations.sol";
+import "src/BorrowerOperationsBatchManager.sol";
 import "src/TroveManager.sol";
 import "src/TroveNFT.sol";
 import "src/CollSurplusPool.sol";
@@ -399,6 +400,12 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
     {
         contracts.borrowerOperations =
             new BorrowerOperations{salt: SALT}(contracts.addressesRegistry, contracts.systemParams);
+
+        BorrowerOperationsBatchManager batchManager =
+            new BorrowerOperationsBatchManager{salt: SALT}(contracts.addressesRegistry, IBorrowerOperations(address(contracts.borrowerOperations)), contracts.systemParams);
+
+        contracts.borrowerOperations.setBatchManagerContract(address(batchManager));
+
         contracts.troveManager = new TroveManager{salt: SALT}(contracts.addressesRegistry, contracts.systemParams);
         contracts.troveNFT = new TroveNFT{salt: SALT}(contracts.addressesRegistry);
         contracts.activePool = new ActivePool{salt: SALT}(contracts.addressesRegistry, contracts.systemParams);

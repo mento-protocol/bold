@@ -6,6 +6,7 @@ import "src/AddressesRegistry.sol";
 import "src/ActivePool.sol";
 import "src/BoldToken.sol";
 import "src/BorrowerOperations.sol";
+import "src/BorrowerOperationsBatchManager.sol";
 import "src/CollSurplusPool.sol";
 import "src/DefaultPool.sol";
 import "src/GasPool.sol";
@@ -173,6 +174,10 @@ contract TestDeployer is MetadataDeployment {
         return abi.encodePacked(_creationCode, abi.encode(_addressesRegistry, _systemParams));
     }
 
+    function getBytecode(bytes memory _creationCode, address _addressesRegistry, address _systemParams, address _batchManager) public pure returns (bytes memory) {
+        return abi.encodePacked(_creationCode, abi.encode(_addressesRegistry, _systemParams, _batchManager));
+    }
+
     function getBytecode(bytes memory _creationCode, bool _disable) public pure returns (bytes memory) {
         return abi.encodePacked(_creationCode, abi.encode(_disable));
     }
@@ -186,6 +191,39 @@ contract TestDeployer is MetadataDeployment {
 
         // NOTE: cast last 20 bytes of hash to address
         return address(uint160(uint256(hash)));
+    }
+
+    function _computeBorrowerOpsAddresses(
+        IAddressesRegistry addressesRegistry,
+        ISystemParams systemParams
+    ) internal view returns (address borrowerOps, address batchManager) {
+        borrowerOps = getAddress(
+            address(this),
+            getBytecode(type(BorrowerOperationsTester).creationCode, address(addressesRegistry), address(systemParams)),
+            SALT
+        );
+
+        batchManager = getAddress(
+            address(this),
+            getBytecode(type(BorrowerOperationsBatchManager).creationCode, address(addressesRegistry), borrowerOps, address(systemParams)),
+            SALT
+        );
+    }
+
+    function _deployBorrowerOpsAndBatchManager(
+        IAddressesRegistry addressesRegistry,
+        ISystemParams systemParams,
+        address computedBatchManager
+    ) internal returns (IBorrowerOperationsTester) {
+        IBorrowerOperationsTester borrowerOps = new BorrowerOperationsTester{salt: SALT}(addressesRegistry, systemParams);
+
+        BorrowerOperationsBatchManager batchManager =
+            new BorrowerOperationsBatchManager{salt: SALT}(addressesRegistry, IBorrowerOperations(address(borrowerOps)), systemParams);
+        assert(address(batchManager) == computedBatchManager);
+
+        borrowerOps.setBatchManagerContract(address(batchManager));
+
+        return borrowerOps;
     }
 
     function deployAndConnectContracts()
@@ -420,12 +458,23 @@ contract TestDeployer is MetadataDeployment {
         IMultiTroveGetter _multiTroveGetter,
         ISystemParams _systemParams
     ) internal returns (LiquityContractsDev memory contracts) {
+        // Copy parameters to memory
+        IERC20Metadata collToken = _collToken;
+        IBoldToken boldToken = _boldToken;
+        ICollateralRegistry collateralRegistry = _collateralRegistry;
+        IERC20Metadata gasToken = _gasToken;
+        IHintHelpers hintHelpers = _hintHelpers;
+        IMultiTroveGetter multiTroveGetter = _multiTroveGetter;
+        ISystemParams systemParams = _systemParams;
+        address troveManagerAddress = _troveManagerAddress;
+        IAddressesRegistry addressesRegistry = _addressesRegistry;
+
         LiquityContractAddresses memory addresses;
-        contracts.collToken = _collToken;
-        contracts.systemParams = _systemParams;
+        contracts.collToken = collToken;
+        contracts.systemParams = systemParams;
 
         // Deploy all contracts, using testers for TM and PriceFeed
-        contracts.addressesRegistry = _addressesRegistry;
+        contracts.addressesRegistry = addressesRegistry;
         contracts.priceFeed = new PriceFeedTestnet();
         contracts.interestRouter = new MockInterestRouter();
 
@@ -437,20 +486,18 @@ contract TestDeployer is MetadataDeployment {
         assert(address(metadataNFT) == addresses.metadataNFT);
 
         // Pre-calc addresses
-        addresses.borrowerOperations = getAddress(
-            address(this),
-            getBytecode(type(BorrowerOperationsTester).creationCode, address(contracts.addressesRegistry), address(_systemParams)),
-            SALT
-        );
-        addresses.troveManager = _troveManagerAddress;
+        bytes32 stabilityPoolSalt = keccak256(abi.encodePacked(address(contracts.addressesRegistry)));
+        address computedBatchManager;
+        (addresses.borrowerOperations, computedBatchManager) = _computeBorrowerOpsAddresses(contracts.addressesRegistry, systemParams);
+
+        addresses.troveManager = troveManagerAddress;
         addresses.troveNFT = getAddress(
             address(this), getBytecode(type(TroveNFT).creationCode, address(contracts.addressesRegistry)), SALT
         );
-        bytes32 stabilityPoolSalt = keccak256(abi.encodePacked(address(contracts.addressesRegistry)));
         addresses.stabilityPool =
-            getAddress(address(this), getBytecode(type(StabilityPool).creationCode, bool(false), address(_systemParams)), stabilityPoolSalt);
+            getAddress(address(this), getBytecode(type(StabilityPool).creationCode, bool(false), address(systemParams)), stabilityPoolSalt);
         addresses.activePool = getAddress(
-            address(this), getBytecode(type(ActivePool).creationCode, address(contracts.addressesRegistry), address(_systemParams)), SALT
+            address(this), getBytecode(type(ActivePool).creationCode, address(contracts.addressesRegistry), address(systemParams)), SALT
         );
         addresses.defaultPool = getAddress(
             address(this), getBytecode(type(DefaultPool).creationCode, address(contracts.addressesRegistry)), SALT
@@ -466,33 +513,36 @@ contract TestDeployer is MetadataDeployment {
         );
 
         // Deploy contracts
-        IAddressesRegistry.AddressVars memory addressVars = IAddressesRegistry.AddressVars({
-            borrowerOperations: IBorrowerOperations(addresses.borrowerOperations),
-            troveManager: ITroveManager(addresses.troveManager),
-            troveNFT: ITroveNFT(addresses.troveNFT),
-            metadataNFT: IMetadataNFT(addresses.metadataNFT),
-            stabilityPool: IStabilityPool(addresses.stabilityPool),
-            priceFeed: contracts.priceFeed,
-            activePool: IActivePool(addresses.activePool),
-            defaultPool: IDefaultPool(addresses.defaultPool),
-            gasPoolAddress: addresses.gasPool,
-            collSurplusPool: ICollSurplusPool(addresses.collSurplusPool),
-            sortedTroves: ISortedTroves(addresses.sortedTroves),
-            interestRouter: contracts.interestRouter,
-            hintHelpers: _hintHelpers,
-            multiTroveGetter: _multiTroveGetter,
-            collateralRegistry: _collateralRegistry,
-            boldToken: _boldToken,
-            collToken: _collToken,
-            gasToken: _gasToken,
-            // TODO: add liquidity strategy
-            liquidityStrategy: makeAddr("liquidityStrategy"),
-            // TODO: add watchdog address
-            watchdogAddress: makeAddr("watchdog")
-        });
-        contracts.addressesRegistry.setAddresses(addressVars);
+        {
+            IAddressesRegistry.AddressVars memory addressVars = IAddressesRegistry.AddressVars({
+                borrowerOperations: IBorrowerOperations(addresses.borrowerOperations),
+                troveManager: ITroveManager(addresses.troveManager),
+                troveNFT: ITroveNFT(addresses.troveNFT),
+                metadataNFT: IMetadataNFT(addresses.metadataNFT),
+                stabilityPool: IStabilityPool(addresses.stabilityPool),
+                priceFeed: contracts.priceFeed,
+                activePool: IActivePool(addresses.activePool),
+                defaultPool: IDefaultPool(addresses.defaultPool),
+                gasPoolAddress: addresses.gasPool,
+                collSurplusPool: ICollSurplusPool(addresses.collSurplusPool),
+                sortedTroves: ISortedTroves(addresses.sortedTroves),
+                interestRouter: contracts.interestRouter,
+                hintHelpers: hintHelpers,
+                multiTroveGetter: multiTroveGetter,
+                collateralRegistry: collateralRegistry,
+                boldToken: boldToken,
+                collToken: collToken,
+                gasToken: gasToken,
+                // TODO: add liquidity strategy
+                liquidityStrategy: makeAddr("liquidityStrategy"),
+                // TODO: add watchdog address
+                watchdogAddress: makeAddr("watchdog")
+            });
+            contracts.addressesRegistry.setAddresses(addressVars);
+        }
 
-        contracts.borrowerOperations = new BorrowerOperationsTester{salt: SALT}(contracts.addressesRegistry, _systemParams);
+        // Deploy BorrowerOps and batch manager
+        contracts.borrowerOperations = _deployBorrowerOpsAndBatchManager(contracts.addressesRegistry, systemParams, computedBatchManager);
         contracts.troveManager = new TroveManagerTester{salt: SALT}(contracts.addressesRegistry, _systemParams);
         contracts.troveNFT = new TroveNFT{salt: SALT}(contracts.addressesRegistry);
         contracts.stabilityPool = new StabilityPool{salt: stabilityPoolSalt}(false, _systemParams);
@@ -638,11 +688,8 @@ contract TestDeployer is MetadataDeployment {
 
         // Pre-calc addresses
         bytes32 stabilityPoolSalt = keccak256(abi.encodePacked(address(contracts.addressesRegistry)));
-        addresses.borrowerOperations = getAddress(
-            address(this),
-            getBytecode(type(BorrowerOperationsTester).creationCode, address(contracts.addressesRegistry), address(_systemParams)),
-            SALT
-        );
+        address computedBatchManager;
+        (addresses.borrowerOperations, computedBatchManager) = _computeBorrowerOpsAddresses(contracts.addressesRegistry, _systemParams);
         addresses.troveManager = _params.troveManagerAddress;
         addresses.troveNFT = getAddress(
             address(this), getBytecode(type(TroveNFT).creationCode, address(contracts.addressesRegistry)), SALT
@@ -669,33 +716,36 @@ contract TestDeployer is MetadataDeployment {
             _deployPriceFeed(_params.branch, _externalAddresses, _oracleParams, addresses.borrowerOperations);
 
         // Deploy contracts
-        IAddressesRegistry.AddressVars memory addressVars = IAddressesRegistry.AddressVars({
-            borrowerOperations: IBorrowerOperations(addresses.borrowerOperations),
-            troveManager: ITroveManager(addresses.troveManager),
-            troveNFT: ITroveNFT(addresses.troveNFT),
-            metadataNFT: IMetadataNFT(addresses.metadataNFT),
-            stabilityPool: IStabilityPool(addresses.stabilityPool),
-            priceFeed: contracts.priceFeed,
-            activePool: IActivePool(addresses.activePool),
-            defaultPool: IDefaultPool(addresses.defaultPool),
-            gasPoolAddress: addresses.gasPool,
-            collSurplusPool: ICollSurplusPool(addresses.collSurplusPool),
-            sortedTroves: ISortedTroves(addresses.sortedTroves),
-            interestRouter: contracts.interestRouter,
-            hintHelpers: _params.hintHelpers,
-            multiTroveGetter: _params.multiTroveGetter,
-            collateralRegistry: _params.collateralRegistry,
-            boldToken: _params.boldToken,
-            collToken: _params.collToken,
-            gasToken: _params.gasToken,
-            // TODO: add liquidity strategy
-            liquidityStrategy: makeAddr("liquidityStrategy"),
-            // TODO: add watchdog address
-            watchdogAddress: makeAddr("watchdog")
-        });
-        contracts.addressesRegistry.setAddresses(addressVars);
+        {
+            IAddressesRegistry.AddressVars memory addressVars = IAddressesRegistry.AddressVars({
+                borrowerOperations: IBorrowerOperations(addresses.borrowerOperations),
+                troveManager: ITroveManager(addresses.troveManager),
+                troveNFT: ITroveNFT(addresses.troveNFT),
+                metadataNFT: IMetadataNFT(addresses.metadataNFT),
+                stabilityPool: IStabilityPool(addresses.stabilityPool),
+                priceFeed: contracts.priceFeed,
+                activePool: IActivePool(addresses.activePool),
+                defaultPool: IDefaultPool(addresses.defaultPool),
+                gasPoolAddress: addresses.gasPool,
+                collSurplusPool: ICollSurplusPool(addresses.collSurplusPool),
+                sortedTroves: ISortedTroves(addresses.sortedTroves),
+                interestRouter: contracts.interestRouter,
+                hintHelpers: _params.hintHelpers,
+                multiTroveGetter: _params.multiTroveGetter,
+                collateralRegistry: _params.collateralRegistry,
+                boldToken: _params.boldToken,
+                collToken: _params.collToken,
+                gasToken: _params.gasToken,
+                // TODO: add liquidity strategy
+                liquidityStrategy: makeAddr("liquidityStrategy"),
+                // TODO: add watchdog address
+                watchdogAddress: makeAddr("watchdog")
+            });
+            contracts.addressesRegistry.setAddresses(addressVars);
+        }
 
-        contracts.borrowerOperations = new BorrowerOperationsTester{salt: SALT}(contracts.addressesRegistry, _systemParams);
+        // Deploy BorrowerOps and batch manager using helper
+        contracts.borrowerOperations = _deployBorrowerOpsAndBatchManager(contracts.addressesRegistry, _systemParams, computedBatchManager);
         contracts.troveManager = new TroveManager{salt: SALT}(contracts.addressesRegistry, _systemParams);
         contracts.troveNFT = new TroveNFT{salt: SALT}(contracts.addressesRegistry);
         contracts.stabilityPool = new StabilityPool{salt: stabilityPoolSalt}(false, _systemParams);
