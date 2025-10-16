@@ -407,7 +407,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             new BorrowerOperations{salt: SALT}(contracts.addressesRegistry, contracts.systemParams);
 
         BorrowerOperationsBatchManager batchManager =
-            new BorrowerOperationsBatchManager{salt: SALT}(contracts.addressesRegistry, IBorrowerOperations(address(contracts.borrowerOperations)), contracts.systemParams);
+            new BorrowerOperationsBatchManager{salt: SALT}(contracts.addressesRegistry, contracts.systemParams);
 
         contracts.borrowerOperations.setBatchManagerContract(address(batchManager));
 

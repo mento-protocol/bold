@@ -69,10 +69,9 @@ contract BorrowerOperationsBatchManager is LiquityBase {
 
     constructor(
         IAddressesRegistry _addressesRegistry,
-        IBorrowerOperations _borrowerOperations,
         ISystemParams _systemParams
     ) LiquityBase(_addressesRegistry) {
-        borrowerOperations = _borrowerOperations;
+        borrowerOperations = _addressesRegistry.borrowerOperations();
         troveManager = _addressesRegistry.troveManager();
         sortedTroves = _addressesRegistry.sortedTroves();
         troveNFT = _addressesRegistry.troveNFT();
