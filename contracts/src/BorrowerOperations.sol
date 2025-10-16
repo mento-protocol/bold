@@ -13,9 +13,9 @@ import "./Interfaces/ISortedTroves.sol";
 import "./Interfaces/ISystemParams.sol";
 import "./Dependencies/LiquityBase.sol";
 import "./Dependencies/AddRemoveManagers.sol";
+import "./Dependencies/BatchManagerLib.sol";
 import "./Types/LatestTroveData.sol";
 import "./Types/LatestBatchData.sol";
-import "./Interfaces/IBorrowerOperationsBatchManager.sol";
 
 /**
  * @dev System parameters pattern:
@@ -175,21 +175,6 @@ contract BorrowerOperations is
 
         // Allow funds movements between Liquity contracts
         collToken.approve(address(activePool), type(uint256).max);
-    }
-
-    // TODO(Mourad): Add to address registry
-    function setBatchManagerContract(
-        address _batchManager
-    ) external {
-        require(
-            batchManagerContract == address(0),
-            "BorrowerOps: batch manager already set"
-        );
-        require(
-            address(_batchManager) != address(0),
-            "BorrowerOps: invalid batch manager address"
-        );
-        batchManagerContract = _batchManager;
     }
 
     function CCR() external view override returns (uint256) {
@@ -1075,28 +1060,32 @@ contract BorrowerOperations is
         uint128 _annualManagementFee,
         uint128 _minInterestRateChangePeriod
     ) external {
-
-        (bool success, ) = batchManagerContract.delegatecall(
-            abi.encodeWithSignature(
-                "registerBatchManager(uint128,uint128,uint128,uint128,uint128)",
+        _requireIsNotShutDown();
+        _requireNonExistentInterestBatchManager(msg.sender);
+        interestBatchManagers[_batchManager] = BatchManagerLib
+            .registerBatchManager(
                 _minInterestRate,
                 _maxInterestRate,
                 _currentInterestRate,
+                _currentInterestRate,
                 _annualManagementFee,
                 _minInterestRateChangePeriod
-            )
+            );
+        troveManager.onRegisterBatchManager(
+            msg.sender,
+            _currentInterestRate,
+            _annualManagementFee
         );
-        require(success, "Batch manager call failed");
     }
 
     function lowerBatchManagementFee(uint256 _newAnnualManagementFee) external {
-        (bool success, ) = batchManagerContract.delegatecall(
-            abi.encodeWithSignature(
-                "lowerBatchManagementFee(uint256)",
-                _newAnnualManagementFee
-            )
+        _requireIsNotShutDown();
+        _requireValidInterestBatchManager(msg.sender);
+        BatchManagerLib.lowerBatchManagementFee(
+            troveManager,
+            activePool,
+            _newAnnualManagementFee
         );
-        require(success, "Batch manager call failed");
     }
 
     function setBatchManagerAnnualInterestRate(
@@ -1105,16 +1094,30 @@ contract BorrowerOperations is
         uint256 _lowerHint,
         uint256 _maxUpfrontFee
     ) external {
-        (bool success, ) = batchManagerContract.delegatecall(
-            abi.encodeWithSignature(
-                "setBatchManagerAnnualInterestRate(uint128,uint256,uint256,uint256)",
-                _newAnnualInterestRate,
-                _upperHint,
-                _lowerHint,
-                _maxUpfrontFee
-            )
+        _requireIsNotShutDown();
+        _requireValidInterestBatchManager(msg.sender);
+        _requireInterestRateInBatchManagerRange(
+            msg.sender,
+            _newAnnualInterestRate
         );
-        require(success, "Batch manager call failed");
+        LatestBatchData memory batch = troveManager.getLatestBatchData(
+            msg.sender
+        );
+        _requireBatchInterestRateChangePeriodPassed(
+            msg.sender,
+            uint256(batch.lastInterestRateAdjTime)
+        );
+        BatchManagerLib.setBatchManagerAnnualInterestRate(
+            batch,
+            priceFeed,
+            activePool,
+            defaultPool,
+            troveManager,
+            _newAnnualInterestRate,
+            _upperHint,
+            _lowerHint,
+            _maxUpfrontFee
+        );
     }
 
     function setInterestBatchManager(
@@ -1124,17 +1127,28 @@ contract BorrowerOperations is
         uint256 _lowerHint,
         uint256 _maxUpfrontFee
     ) public override {
-        (bool success, ) = batchManagerContract.delegatecall(
-            abi.encodeWithSignature(
-                "setInterestBatchManager(uint256,address,uint256,uint256,uint256)",
-                _troveId,
-                _newBatchManager,
-                _upperHint,
-                _lowerHint,
-                _maxUpfrontFee
-            )
+        _requireIsNotShutDown();
+        _requireValidInterestBatchManager(_newBatchManager);
+        _requireIsNotInBatch(_troveId);
+
+        BatchManagerLib.setInterestBatchManager(
+            priceFeed,
+            troveManager,
+            activePool,
+            defaultPool,
+            sortedTroves,
+            troveNFT,
+            systemParams,
+            _troveId,
+            _newBatchManager,
+            _upperHint,
+            _lowerHint,
+            _maxUpfrontFee
         );
-        require(success, "Batch manager call failed");
+        interestBatchManagerOf[_troveId] = _newBatchManager;
+        // Can't have both individual delegation and batch manager
+        if (interestIndividualDelegateOf[_troveId].account != address(0))
+            delete interestIndividualDelegateOf[_troveId];
     }
 
     function kickFromBatch(
@@ -1203,45 +1217,6 @@ contract BorrowerOperations is
             _addLowerHint,
             _maxUpfrontFee
         );
-    }
-
-    function _applyUpfrontFee(
-        uint256 _troveEntireColl,
-        uint256 _troveEntireDebt,
-        TroveChange memory _troveChange,
-        uint256 _maxUpfrontFee,
-        bool _isTroveInBatch
-    ) internal returns (uint256) {
-        (uint256 price, ) = priceFeed.fetchPrice();
-
-        uint256 avgInterestRate = activePool
-            .getNewApproxAvgInterestRateFromTroveChange(_troveChange);
-        _troveChange.upfrontFee = _calcUpfrontFee(
-            _troveEntireDebt,
-            avgInterestRate
-        );
-        _requireUserAcceptsUpfrontFee(_troveChange.upfrontFee, _maxUpfrontFee);
-
-        _troveEntireDebt += _troveChange.upfrontFee;
-
-        // ICR is based on the requested Bold amount + upfront fee.
-        uint256 newICR = LiquityMath._computeCR(
-            _troveEntireColl,
-            _troveEntireDebt,
-            price
-        );
-        if (_isTroveInBatch) {
-            _requireICRisAboveMCRPlusBCR(newICR);
-        } else {
-            _requireICRisAboveMCR(newICR);
-        }
-
-        // Disallow a premature adjustment if it would result in TCR < CCR
-        // (which includes the case when TCR is already below CCR before the adjustment).
-        uint256 newTCR = _getNewTCRFromTroveChange(_troveChange, price);
-        _requireNewTCRisAboveCCR(newTCR);
-
-        return _troveEntireDebt;
     }
 
     function _calcUpfrontFee(
@@ -1377,31 +1352,6 @@ contract BorrowerOperations is
     }
 
     // --- Callback functions for BorrowerOperationsBatchManager ---
-
-    function setBatchManagerData(
-        address _batchManager,
-        uint128 _minInterestRate,
-        uint128 _maxInterestRate,
-        uint256 _minInterestRateChangePeriod
-    ) external {
-        require(msg.sender == batchManagerContract, "Only batch manager");
-        interestBatchManagers[_batchManager] = InterestBatchManager(
-            _minInterestRate,
-            _maxInterestRate,
-            _minInterestRateChangePeriod
-        );
-    }
-
-    function setTroveBatchManager(
-        uint256 _troveId,
-        address _newBatchManager
-    ) external {
-        require(msg.sender == batchManagerContract, "Only batch manager");
-        interestBatchManagerOf[_troveId] = _newBatchManager;
-        // Can't have both individual delegation and batch manager
-        if (interestIndividualDelegateOf[_troveId].account != address(0))
-            delete interestIndividualDelegateOf[_troveId];
-    }
 
     function removeTroveFromBatch(uint256 _troveId) external {
         require(msg.sender == batchManagerContract, "Only batch manager");
