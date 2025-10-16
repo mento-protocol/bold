@@ -15,6 +15,7 @@ import "./Dependencies/LiquityBase.sol";
 import "./Dependencies/AddRemoveManagers.sol";
 import "./Types/LatestTroveData.sol";
 import "./Types/LatestBatchData.sol";
+import "./Interfaces/IBorrowerOperationsBatchManager.sol";
 
 /**
  * @dev System parameters pattern:
@@ -176,9 +177,18 @@ contract BorrowerOperations is
         collToken.approve(address(activePool), type(uint256).max);
     }
 
-    function setBatchManagerContract(address _batchManager) external {
-        require(batchManagerContract == address(0), "BorrowerOps: batch manager already set");
-        require(_batchManager != address(0), "BorrowerOps: invalid batch manager address");
+    // TODO(Mourad): Add to address registry
+    function setBatchManagerContract(
+        address _batchManager
+    ) external {
+        require(
+            batchManagerContract == address(0),
+            "BorrowerOps: batch manager already set"
+        );
+        require(
+            address(_batchManager) != address(0),
+            "BorrowerOps: invalid batch manager address"
+        );
         batchManagerContract = _batchManager;
     }
 
@@ -400,7 +410,11 @@ contract BorrowerOperations is
 
         // Mint the requested _boldAmount to the borrower and mint the gas comp to the GasPool
         vars.boldToken.mint(msg.sender, _boldAmount);
-        gasToken.transferFrom(msg.sender, gasPoolAddress, systemParams.ETH_GAS_COMPENSATION());
+        gasToken.transferFrom(
+            msg.sender,
+            gasPoolAddress,
+            systemParams.ETH_GAS_COMPENSATION()
+        );
 
         return vars.troveId;
     }
@@ -646,7 +660,7 @@ contract BorrowerOperations is
         vars.activePool = activePool;
         vars.boldToken = boldToken;
 
-        (vars.price,) = priceFeed.fetchPrice();
+        (vars.price, ) = priceFeed.fetchPrice();
         vars.isBelowCriticalThreshold = _checkBelowCriticalThreshold(
             vars.price,
             systemParams.CCR()
@@ -677,7 +691,8 @@ contract BorrowerOperations is
 
         // When the adjustment is a debt repayment, check it's a valid amount and that the caller has enough Bold
         if (_troveChange.debtDecrease > 0) {
-            uint256 maxRepayment = vars.trove.entireDebt > systemParams.MIN_DEBT()
+            uint256 maxRepayment = vars.trove.entireDebt >
+                systemParams.MIN_DEBT()
                 ? vars.trove.entireDebt - systemParams.MIN_DEBT()
                 : 0;
             if (_troveChange.debtDecrease > maxRepayment) {
@@ -907,7 +922,11 @@ contract BorrowerOperations is
         );
 
         // Return ETH gas compensation
-        gasToken.transferFrom(gasPoolAddress, receiver, systemParams.ETH_GAS_COMPENSATION());
+        gasToken.transferFrom(
+            gasPoolAddress,
+            receiver,
+            systemParams.ETH_GAS_COMPENSATION()
+        );
         // Burn the remainder of the Trove's entire debt from the user
         boldTokenCached.burn(msg.sender, trove.entireDebt);
 
@@ -1056,7 +1075,8 @@ contract BorrowerOperations is
         uint128 _annualManagementFee,
         uint128 _minInterestRateChangePeriod
     ) external {
-        (bool success,) = batchManagerContract.call(
+
+        (bool success, ) = batchManagerContract.delegatecall(
             abi.encodeWithSignature(
                 "registerBatchManager(uint128,uint128,uint128,uint128,uint128)",
                 _minInterestRate,
@@ -1070,7 +1090,7 @@ contract BorrowerOperations is
     }
 
     function lowerBatchManagementFee(uint256 _newAnnualManagementFee) external {
-        (bool success,) = batchManagerContract.call(
+        (bool success, ) = batchManagerContract.delegatecall(
             abi.encodeWithSignature(
                 "lowerBatchManagementFee(uint256)",
                 _newAnnualManagementFee
@@ -1085,7 +1105,7 @@ contract BorrowerOperations is
         uint256 _lowerHint,
         uint256 _maxUpfrontFee
     ) external {
-        (bool success,) = batchManagerContract.call(
+        (bool success, ) = batchManagerContract.delegatecall(
             abi.encodeWithSignature(
                 "setBatchManagerAnnualInterestRate(uint128,uint256,uint256,uint256)",
                 _newAnnualInterestRate,
@@ -1104,7 +1124,7 @@ contract BorrowerOperations is
         uint256 _lowerHint,
         uint256 _maxUpfrontFee
     ) public override {
-        (bool success,) = batchManagerContract.call(
+        (bool success, ) = batchManagerContract.delegatecall(
             abi.encodeWithSignature(
                 "setInterestBatchManager(uint256,address,uint256,uint256,uint256)",
                 _troveId,
@@ -1122,7 +1142,7 @@ contract BorrowerOperations is
         uint256 _upperHint,
         uint256 _lowerHint
     ) external override {
-        (bool success,) = batchManagerContract.call(
+        (bool success, ) = batchManagerContract.delegatecall(
             abi.encodeWithSignature(
                 "kickFromBatch(uint256,uint256,uint256)",
                 _troveId,
@@ -1140,7 +1160,7 @@ contract BorrowerOperations is
         uint256 _lowerHint,
         uint256 _maxUpfrontFee
     ) public override {
-        (bool success,) = batchManagerContract.call(
+        (bool success, ) = batchManagerContract.delegatecall(
             abi.encodeWithSignature(
                 "removeFromBatch(uint256,uint256,uint256,uint256,uint256)",
                 _troveId,
@@ -1257,7 +1277,7 @@ contract BorrowerOperations is
 
         uint256 totalColl = getEntireBranchColl();
         uint256 totalDebt = getEntireBranchDebt();
-        (uint256 price,) = priceFeed.fetchPrice();
+        (uint256 price, ) = priceFeed.fetchPrice();
 
         // Otherwise, proceed with the TCR check:
         uint256 TCR = LiquityMath._computeCR(totalColl, totalDebt, price);
@@ -1397,13 +1417,14 @@ contract BorrowerOperations is
         bool _isTroveInBatch
     ) external returns (uint256) {
         require(msg.sender == batchManagerContract, "Only batch manager");
-        return _applyUpfrontFee(
-            _troveEntireColl,
-            _troveEntireDebt,
-            _troveChange,
-            _maxUpfrontFee,
-            _isTroveInBatch
-        );
+        return
+            _applyUpfrontFee(
+                _troveEntireColl,
+                _troveEntireDebt,
+                _troveChange,
+                _maxUpfrontFee,
+                _isTroveInBatch
+            );
     }
 
     // --- 'Require' wrapper functions ---
