@@ -10,6 +10,7 @@ import "./Interfaces/ISortedTroves.sol";
 import "./Interfaces/ITroveNFT.sol";
 import "./Interfaces/ISystemParams.sol";
 import "./Interfaces/IPriceFeed.sol";
+import "./Interfaces/IBatchManagerOperations.sol";
 import "./Dependencies/LiquityBase.sol";
 import "./Dependencies/LiquityMath.sol";
 import "./Dependencies/Constants.sol";
@@ -17,61 +18,21 @@ import "./Types/LatestTroveData.sol";
 import "./Types/LatestBatchData.sol";
 
 /**
- * @title BorrowerOperationsBatchManager
- * @notice Handles complex batch manager operations for BorrowerOperations
+ * @title BatchManagerOperations
+ * @notice Handles batch manager operations for BorrowerOperations
  * @dev This contract is extracted to reduce the size of the main BorrowerOperations contract.
- *      It contains the largest batch management functions. BorrowerOperations forwards calls here.
+ *      It contains the batch management functions. BorrowerOperations delegates calls here.
  */
-contract BorrowerOperationsBatchManager is LiquityBase {
+contract BatchManagerOperations is LiquityBase, IBatchManagerOperations {
     ITroveManager public immutable troveManager;
     ISortedTroves public immutable sortedTroves;
     ITroveNFT public immutable troveNFT;
     ISystemParams public immutable systemParams;
-    IBorrowerOperations public immutable borrowerOperations;
-
-    error IsShutDown();
-    error InterestNotInRange();
-    error BatchInterestRateChangePeriodNotPassed();
-    error InvalidInterestBatchManager();
-    error BatchManagerExists();
-    error NewFeeNotLower();
-    error AnnualManagementFeeTooHigh();
-    error MinInterestRateChangePeriodTooLow();
-    error MinGeMax();
-    error NotBorrower();
-    error TroveNotActive();
-    error TroveNotInBatch();
-    error TroveNotOpen();
-    error ICRBelowMCRPlusBCR();
-    error TCRBelowCCR();
-    error UpfrontFeeTooHigh();
-    error InterestRateTooLow();
-    error InterestRateTooHigh();
-    error BatchSharesRatioTooLow();
-
-    struct LocalVariables_setInterestBatchManager {
-        ITroveManager troveManager;
-        IActivePool activePool;
-        ISortedTroves sortedTroves;
-        LatestTroveData trove;
-        LatestBatchData newBatch;
-    }
-
-    struct LocalVariables_removeFromBatch {
-        ITroveManager troveManager;
-        ISortedTroves sortedTroves;
-        address batchManager;
-        LatestTroveData trove;
-        LatestBatchData batch;
-        uint256 batchFutureDebt;
-        TroveChange batchChange;
-    }
 
     constructor(
         IAddressesRegistry _addressesRegistry,
         ISystemParams _systemParams
     ) LiquityBase(_addressesRegistry) {
-        borrowerOperations = _addressesRegistry.borrowerOperations();
         troveManager = _addressesRegistry.troveManager();
         sortedTroves = _addressesRegistry.sortedTroves();
         troveNFT = _addressesRegistry.troveNFT();
@@ -87,8 +48,6 @@ contract BorrowerOperationsBatchManager is LiquityBase {
         uint128 _annualManagementFee,
         uint128 _minInterestRateChangePeriod
     ) external {
-        _requireIsNotShutDown();
-        _requireNonExistentInterestBatchManager(msg.sender);
         _requireValidAnnualInterestRate(_minInterestRate);
         _requireValidAnnualInterestRate(_maxInterestRate);
         _requireOrderedRange(_minInterestRate, _maxInterestRate);
@@ -103,27 +62,12 @@ contract BorrowerOperationsBatchManager is LiquityBase {
         if (_minInterestRateChangePeriod < MIN_INTEREST_RATE_CHANGE_PERIOD) {
             revert MinInterestRateChangePeriodTooLow();
         }
-
-        // Call back to BorrowerOperations to store the batch manager
-        borrowerOperations.setBatchManagerData(
-            msg.sender,
-            _minInterestRate,
-            _maxInterestRate,
-            _minInterestRateChangePeriod
-        );
-
-        troveManager.onRegisterBatchManager(
-            msg.sender,
-            _currentInterestRate,
-            _annualManagementFee
-        );
     }
 
     function lowerBatchManagementFee(uint256 _newAnnualManagementFee) external {
-        _requireIsNotShutDown();
-        _requireValidInterestBatchManager(msg.sender);
-
-        LatestBatchData memory batch = troveManager.getLatestBatchData(msg.sender);
+        LatestBatchData memory batch = troveManager.getLatestBatchData(
+            msg.sender
+        );
         if (_newAnnualManagementFee >= batch.annualManagementFee) {
             revert NewFeeNotLower();
         }
@@ -159,19 +103,17 @@ contract BorrowerOperationsBatchManager is LiquityBase {
         uint128 _newAnnualInterestRate,
         uint256 _upperHint,
         uint256 _lowerHint,
-        uint256 _maxUpfrontFee
+        uint256 _maxUpfrontFee,
+        uint256 _minInterestRateChangePeriod
     ) external {
-        _requireIsNotShutDown();
-        _requireValidInterestBatchManager(msg.sender);
-        _requireInterestRateInBatchManagerRange(
-            msg.sender,
-            _newAnnualInterestRate
-        );
 
-        LatestBatchData memory batch = troveManager.getLatestBatchData(msg.sender);
+        LatestBatchData memory batch = troveManager.getLatestBatchData(
+            msg.sender
+        );
         _requireBatchInterestRateChangePeriodPassed(
             msg.sender,
-            uint256(batch.lastInterestRateAdjTime)
+            uint256(batch.lastInterestRateAdjTime),
+            _minInterestRateChangePeriod
         );
 
         uint256 newDebt = batch.entireDebtWithoutRedistribution;
@@ -192,7 +134,7 @@ contract BorrowerOperationsBatchManager is LiquityBase {
             block.timestamp <
             batch.lastInterestRateAdjTime + INTEREST_RATE_ADJ_COOLDOWN
         ) {
-            (uint256 price, ) = priceFeed.fetchPrice();
+            uint256 price = priceFeed.fetchPrice();
 
             uint256 avgInterestRate = activePool
                 .getNewApproxAvgInterestRateFromTroveChange(batchChange);
@@ -248,19 +190,11 @@ contract BorrowerOperationsBatchManager is LiquityBase {
         uint256 _lowerHint,
         uint256 _maxUpfrontFee
     ) external {
-        _requireIsNotShutDown();
         LocalVariables_setInterestBatchManager memory vars;
         vars.troveManager = troveManager;
         vars.activePool = activePool;
         vars.sortedTroves = sortedTroves;
 
-        _requireTroveIsActive(vars.troveManager, _troveId);
-        _requireCallerIsBorrower(_troveId);
-        _requireValidInterestBatchManager(_newBatchManager);
-        _requireIsNotInBatch(_troveId);
-
-        // Update state in BorrowerOperations
-        borrowerOperations.setTroveBatchManager(_troveId, _newBatchManager);
 
         vars.trove = vars.troveManager.getLatestTroveData(_troveId);
         vars.newBatch = vars.troveManager.getLatestBatchData(_newBatchManager);
@@ -332,6 +266,21 @@ contract BorrowerOperationsBatchManager is LiquityBase {
         );
     }
 
+    function kickFromBatch(
+        uint256 _troveId,
+        uint256 _upperHint,
+        uint256 _lowerHint
+    ) external {
+        _removeFromBatchInternal(
+            _troveId,
+            0, // ignored when kicking
+            _upperHint,
+            _lowerHint,
+            0, // will use the batch's existing interest rate, so no fee
+            true
+        );
+    }
+
     function removeFromBatch(
         uint256 _troveId,
         uint256 _newAnnualInterestRate,
@@ -349,21 +298,6 @@ contract BorrowerOperationsBatchManager is LiquityBase {
         );
     }
 
-    function kickFromBatch(
-        uint256 _troveId,
-        uint256 _upperHint,
-        uint256 _lowerHint
-    ) external {
-        _removeFromBatchInternal(
-            _troveId,
-            0, // ignored when kicking
-            _upperHint,
-            _lowerHint,
-            0, // will use the batch's existing interest rate, so no fee
-            true
-        );
-    }
-
     function _removeFromBatchInternal(
         uint256 _troveId,
         uint256 _newAnnualInterestRate,
@@ -372,8 +306,6 @@ contract BorrowerOperationsBatchManager is LiquityBase {
         uint256 _maxUpfrontFee,
         bool _kick
     ) internal {
-        _requireIsNotShutDown();
-
         LocalVariables_removeFromBatch memory vars;
         vars.troveManager = troveManager;
         vars.sortedTroves = sortedTroves;
@@ -400,8 +332,7 @@ contract BorrowerOperationsBatchManager is LiquityBase {
             _newAnnualInterestRate = vars.batch.annualInterestRate;
         }
 
-        // Update state in BorrowerOperations
-        borrowerOperations.removeTroveFromBatch(_troveId);
+        IBorrowerOperations(address(this)).removeTroveFromBatch(_troveId);
 
         if (!_checkTroveIsZombie(vars.troveManager, _troveId)) {
             // Remove trove from Batch in SortedTroves
@@ -516,14 +447,15 @@ contract BorrowerOperationsBatchManager is LiquityBase {
         bool _isTroveInBatch
     ) internal returns (uint256) {
         // Delegate to BorrowerOperations for this calculation
-        return borrowerOperations.applyUpfrontFee(
-            _troveId,
-            _troveEntireColl,
-            _troveEntireDebt,
-            _troveChange,
-            _maxUpfrontFee,
-            _isTroveInBatch
-        );
+        return
+            IBorrowerOperations(address(this)).applyUpfrontFee(
+                _troveId,
+                _troveEntireColl,
+                _troveEntireDebt,
+                _troveChange,
+                _maxUpfrontFee,
+                _isTroveInBatch
+            );
     }
 
     function _checkTroveIsZombie(
@@ -535,12 +467,6 @@ contract BorrowerOperationsBatchManager is LiquityBase {
     }
 
     // --- Validation Functions ---
-
-    function _requireIsNotShutDown() internal view {
-        if (borrowerOperations.hasBeenShutDown()) {
-            revert IsShutDown();
-        }
-    }
 
     function _requireValidAnnualInterestRate(
         uint256 _annualInterestRate
@@ -573,47 +499,13 @@ contract BorrowerOperationsBatchManager is LiquityBase {
         }
     }
 
-    function _requireInterestRateInBatchManagerRange(
-        address _interestBatchManagerAddress,
-        uint256 _annualInterestRate
-    ) internal view {
-        IBorrowerOperations.InterestBatchManager
-            memory interestBatchManager = borrowerOperations.getInterestBatchManager(_interestBatchManagerAddress);
-        _requireInterestRateInRange(
-            _annualInterestRate,
-            interestBatchManager.minInterestRate,
-            interestBatchManager.maxInterestRate
-        );
-    }
-
     function _requireBatchInterestRateChangePeriodPassed(
         address _interestBatchManagerAddress,
-        uint256 _lastInterestRateAdjTime
+        uint256 _lastInterestRateAdjTime,
+        uint256 _minInterestRateChangePeriod
     ) internal view {
-        IBorrowerOperations.InterestBatchManager
-            memory interestBatchManager = borrowerOperations.getInterestBatchManager(_interestBatchManagerAddress);
-        if (
-            block.timestamp <
-            _lastInterestRateAdjTime +
-                uint256(interestBatchManager.minInterestRateChangePeriod)
-        ) {
+        if (block.timestamp < _lastInterestRateAdjTime + _minInterestRateChangePeriod) {
             revert BatchInterestRateChangePeriodNotPassed();
-        }
-    }
-
-    function _requireValidInterestBatchManager(
-        address _interestBatchManagerAddress
-    ) internal view {
-        if (!borrowerOperations.checkBatchManagerExists(_interestBatchManagerAddress)) {
-            revert InvalidInterestBatchManager();
-        }
-    }
-
-    function _requireNonExistentInterestBatchManager(
-        address _interestBatchManagerAddress
-    ) internal view {
-        if (borrowerOperations.checkBatchManagerExists(_interestBatchManagerAddress)) {
-            revert BatchManagerExists();
         }
     }
 
@@ -661,16 +553,12 @@ contract BorrowerOperationsBatchManager is LiquityBase {
         }
     }
 
-    function _requireIsNotInBatch(uint256 _troveId) internal view {
-        if (borrowerOperations.interestBatchManagerOf(_troveId) != address(0)) {
-            revert();
-        }
-    }
-
     function _requireIsInBatch(
         uint256 _troveId
     ) internal view returns (address) {
-        address batchManager = borrowerOperations.interestBatchManagerOf(_troveId);
+        address batchManager = IBorrowerOperations(address(this)).interestBatchManagerOf(
+            _troveId
+        );
         if (batchManager == address(0)) {
             revert TroveNotInBatch();
         }
