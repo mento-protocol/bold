@@ -97,6 +97,8 @@ interface IBorrowerOperations is ILiquityBase, IAddRemoveManagers {
 
     function checkBatchManagerExists(address _batchMananger) external view returns (bool);
 
+    function setBatchManagerContract(address _batchManager) external;
+
     // -- individual delegation --
     struct InterestIndividualDelegate {
         address account;
@@ -170,4 +172,27 @@ interface IBorrowerOperations is ILiquityBase, IAddRemoveManagers {
         uint256 _addLowerHint,
         uint256 _maxUpfrontFee
     ) external;
+
+    function setBatchManagerData(
+        address _batchManager,
+        uint128 _minInterestRate,
+        uint128 _maxInterestRate,
+        uint256 _minInterestRateChangePeriod
+    ) external;
+
+    function setTroveBatchManager(
+        uint256 _troveId,
+        address _newBatchManager
+    ) external;
+
+    function removeTroveFromBatch(uint256 _troveId) external;
+
+    function applyUpfrontFee(
+        uint256 _troveId,
+        uint256 _troveEntireColl,
+        uint256 _troveEntireDebt,
+        TroveChange memory _troveChange,
+        uint256 _maxUpfrontFee,
+        bool _isTroveInBatch
+    ) external returns (uint256);
 }
