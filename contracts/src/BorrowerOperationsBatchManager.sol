@@ -192,7 +192,7 @@ contract BorrowerOperationsBatchManager is LiquityBase {
             block.timestamp <
             batch.lastInterestRateAdjTime + INTEREST_RATE_ADJ_COOLDOWN
         ) {
-            (uint256 price, ) = priceFeed.fetchPrice();
+            uint256 price = priceFeed.fetchPrice();
 
             uint256 avgInterestRate = activePool
                 .getNewApproxAvgInterestRateFromTroveChange(batchChange);
