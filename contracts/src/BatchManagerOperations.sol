@@ -226,8 +226,7 @@ contract BatchManagerOperations is IBatchManagerOperations {
         // An upfront fee is always charged upon joining a batch to ensure that borrowers can not game the fee logic
         // and gain free interest rate updates (e.g. if they also manage the batch they joined)
         // It checks the resulting ICR
-        vars.trove.entireDebt = _applyUpfrontFeeViaBorrowerOps(
-            _troveId,
+        vars.trove.entireDebt = _applyUpfrontFee(
             vars.trove.entireColl,
             vars.trove.entireDebt,
             newBatchTroveChange,
@@ -382,8 +381,7 @@ contract BatchManagerOperations is IBatchManagerOperations {
             block.timestamp <
             vars.trove.lastInterestRateAdjTime + INTEREST_RATE_ADJ_COOLDOWN
         ) {
-            vars.trove.entireDebt = _applyUpfrontFeeViaBorrowerOps(
-                _troveId,
+            vars.trove.entireDebt = _applyUpfrontFee(
                 vars.trove.entireColl,
                 vars.trove.entireDebt,
                 vars.batchChange,
@@ -447,24 +445,43 @@ contract BatchManagerOperations is IBatchManagerOperations {
         newTCR = LiquityMath._computeCR(totalColl, totalDebt, _price);
     }
 
-    function _applyUpfrontFeeViaBorrowerOps(
-        uint256 _troveId,
+    function _applyUpfrontFee(
         uint256 _troveEntireColl,
         uint256 _troveEntireDebt,
         TroveChange memory _troveChange,
         uint256 _maxUpfrontFee,
         bool _isTroveInBatch
     ) internal returns (uint256) {
-        // Delegate to BorrowerOperations for this calculation
-        return
-            IBorrowerOperations(address(this)).applyUpfrontFee(
-                _troveId,
-                _troveEntireColl,
-                _troveEntireDebt,
-                _troveChange,
-                _maxUpfrontFee,
-                _isTroveInBatch
-            );
+        uint256 price = priceFeed.fetchPrice();
+
+        uint256 avgInterestRate = activePool
+            .getNewApproxAvgInterestRateFromTroveChange(_troveChange);
+        _troveChange.upfrontFee = _calcUpfrontFee(
+            _troveEntireDebt,
+            avgInterestRate
+        );
+        _requireUserAcceptsUpfrontFee(_troveChange.upfrontFee, _maxUpfrontFee);
+
+        _troveEntireDebt += _troveChange.upfrontFee;
+
+        // ICR is based on the requested Bold amount + upfront fee.
+        uint256 newICR = LiquityMath._computeCR(
+            _troveEntireColl,
+            _troveEntireDebt,
+            price
+        );
+        if (_isTroveInBatch) {
+            _requireICRisAboveMCRPlusBCR(newICR);
+        } else {
+            _requireICRisAboveMCR(newICR);
+        }
+
+        // Disallow a premature adjustment if it would result in TCR < CCR
+        // (which includes the case when TCR is already below CCR before the adjustment).
+        uint256 newTCR = _getNewTCRFromTroveChange(_troveChange, price);
+        _requireNewTCRisAboveCCR(newTCR);
+
+        return _troveEntireDebt;
     }
 
     function _checkTroveIsZombie(
@@ -577,4 +594,17 @@ contract BatchManagerOperations is IBatchManagerOperations {
         }
         return batchManager;
     }
+
+    function _requireICRisAboveMCR(uint256 _newICR) internal view {
+        if (_newICR < systemParams.MCR()) {
+            revert ICRBelowMCR();
+        }
+    }
+
+    function _requireICRisAboveMCRPlusBCR(uint256 _newICR) internal view {
+        if (_newICR < systemParams.MCR() + systemParams.BCR()) {
+            revert ICRBelowMCRPlusBCR();
+        }
+    }
+
 }

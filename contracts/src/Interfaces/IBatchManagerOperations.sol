@@ -21,6 +21,7 @@ interface IBatchManagerOperations {
     error TroveNotOpen();
     error ICRBelowMCRPlusBCR();
     error TCRBelowCCR();
+    error ICRBelowMCR();
     error UpfrontFeeTooHigh();
     error InterestRateTooLow();
     error InterestRateTooHigh();

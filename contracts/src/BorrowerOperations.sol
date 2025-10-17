@@ -1398,25 +1398,6 @@ contract BorrowerOperations is
         delete interestBatchManagerOf[_troveId];
     }
 
-    function applyUpfrontFee(
-        uint256 _troveId,
-        uint256 _troveEntireColl,
-        uint256 _troveEntireDebt,
-        TroveChange memory _troveChange,
-        uint256 _maxUpfrontFee,
-        bool _isTroveInBatch
-    ) external returns (uint256) {
-        _requireSelf();
-        return
-            _applyUpfrontFee(
-                _troveEntireColl,
-                _troveEntireDebt,
-                _troveChange,
-                _maxUpfrontFee,
-                _isTroveInBatch
-            );
-    }
-
     // --- 'Require' wrapper functions ---
 
     function _requireIsNotShutDown() internal view {
