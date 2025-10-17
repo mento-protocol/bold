@@ -169,6 +169,8 @@ contract BorrowerOperations is
         boldToken = _addressesRegistry.boldToken();
         // We can leave the deployment script as-is by just having BorrowerOperations deploy its
         // own batchManagerOperations contract
+        // /!\ If we have to redeploy a BorrowerOps that could need the same batchManagerOps then we
+        // would replace this line with some extra param, but that seems unlikely
         batchManagerOperations = address(new BatchManagerOperations(_addressesRegistry, _systemParams));
 
         emit TroveManagerAddressChanged(address(troveManager));
