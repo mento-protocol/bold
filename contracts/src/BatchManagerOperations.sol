@@ -23,16 +23,22 @@ import "./Types/LatestBatchData.sol";
  * @dev This contract is extracted to reduce the size of the main BorrowerOperations contract.
  *      It contains the batch management functions. BorrowerOperations delegates calls here.
  */
-contract BatchManagerOperations is LiquityBase, IBatchManagerOperations {
-    ITroveManager public immutable troveManager;
-    ISortedTroves public immutable sortedTroves;
-    ITroveNFT public immutable troveNFT;
-    ISystemParams public immutable systemParams;
+contract BatchManagerOperations is IBatchManagerOperations {
+    IActivePool private immutable activePool;
+    IDefaultPool private immutable defaultPool;
+    IPriceFeed private immutable priceFeed;
+    ITroveManager private immutable troveManager;
+    ISortedTroves private immutable sortedTroves;
+    ITroveNFT private immutable troveNFT;
+    ISystemParams private immutable systemParams;
 
     constructor(
         IAddressesRegistry _addressesRegistry,
         ISystemParams _systemParams
-    ) LiquityBase(_addressesRegistry) {
+    ) {
+        activePool = _addressesRegistry.activePool();
+        defaultPool = _addressesRegistry.defaultPool();
+        priceFeed = _addressesRegistry.priceFeed();
         troveManager = _addressesRegistry.troveManager();
         sortedTroves = _addressesRegistry.sortedTroves();
         troveNFT = _addressesRegistry.troveNFT();
@@ -50,12 +56,15 @@ contract BatchManagerOperations is LiquityBase, IBatchManagerOperations {
     ) external {
         _requireValidAnnualInterestRate(_minInterestRate);
         _requireValidAnnualInterestRate(_maxInterestRate);
+        // With the check below, it could only be ==
         _requireOrderedRange(_minInterestRate, _maxInterestRate);
         _requireInterestRateInRange(
             _currentInterestRate,
             _minInterestRate,
             _maxInterestRate
         );
+        // Not needed, implicitly checked in the condition above:
+        //_requireValidAnnualInterestRate(_currentInterestRate);
         if (_annualManagementFee > MAX_ANNUAL_BATCH_MANAGEMENT_FEE) {
             revert AnnualManagementFeeTooHigh();
         }
@@ -195,7 +204,6 @@ contract BatchManagerOperations is LiquityBase, IBatchManagerOperations {
         vars.activePool = activePool;
         vars.sortedTroves = sortedTroves;
 
-
         vars.trove = vars.troveManager.getLatestTroveData(_troveId);
         vars.newBatch = vars.troveManager.getLatestBatchData(_newBatchManager);
 
@@ -215,7 +223,9 @@ contract BatchManagerOperations is LiquityBase, IBatchManagerOperations {
                 vars.trove.entireDebt) *
             vars.newBatch.annualInterestRate;
 
-        // An upfront fee is always charged upon joining a batch
+        // An upfront fee is always charged upon joining a batch to ensure that borrowers can not game the fee logic
+        // and gain free interest rate updates (e.g. if they also manage the batch they joined)
+        // It checks the resulting ICR
         vars.trove.entireDebt = _applyUpfrontFeeViaBorrowerOps(
             _troveId,
             vars.trove.entireColl,
@@ -426,14 +436,13 @@ contract BatchManagerOperations is LiquityBase, IBatchManagerOperations {
         TroveChange memory _troveChange,
         uint256 _price
     ) internal view returns (uint256 newTCR) {
-        uint256 totalColl = getEntireBranchColl();
-        totalColl += _troveChange.collIncrease;
-        totalColl -= _troveChange.collDecrease;
+        uint256 activeColl = activePool.getCollBalance();
+        uint256 liquidatedColl = defaultPool.getCollBalance();
+        uint256 totalColl = activeColl + liquidatedColl + _troveChange.collIncrease - _troveChange.collDecrease;
 
-        uint256 totalDebt = getEntireBranchDebt();
-        totalDebt += _troveChange.debtIncrease;
-        totalDebt += _troveChange.upfrontFee;
-        totalDebt -= _troveChange.debtDecrease;
+        uint256 activeDebt = activePool.getBoldDebt();
+        uint256 closedDebt = defaultPool.getBoldDebt();
+        uint256 totalDebt = activeDebt + closedDebt + _troveChange.debtIncrease + _troveChange.upfrontFee - _troveChange.debtDecrease;
 
         newTCR = LiquityMath._computeCR(totalColl, totalDebt, _price);
     }
@@ -464,6 +473,10 @@ contract BatchManagerOperations is LiquityBase, IBatchManagerOperations {
     ) internal view returns (bool) {
         ITroveManager.Status status = _troveManager.getTroveStatus(_troveId);
         return status == ITroveManager.Status.zombie;
+    }
+
+    function _calcInterest(uint256 _weightedDebt, uint256 _period) internal pure returns (uint256) {
+        return _weightedDebt * _period / ONE_YEAR / DECIMAL_PRECISION;
     }
 
     // --- Validation Functions ---
