@@ -1076,11 +1076,7 @@ contract BorrowerOperations is
                 _minInterestRateChangePeriod
             )
         );
-        if (!success) {
-            assembly {
-                revert(add(0x20, data), mload(data))
-            }
-        }
+        _requireDelegateCallSucceeded(success, data);
         interestBatchManagers[msg.sender] = InterestBatchManager(
             _minInterestRate,
             _maxInterestRate,
@@ -1102,11 +1098,7 @@ contract BorrowerOperations is
                 _newAnnualManagementFee
             )
         );
-        if (!success) {
-            assembly {
-                revert(add(0x20, data), mload(data))
-            }
-        }
+        _requireDelegateCallSucceeded(success, data);
     }
 
     function setBatchManagerAnnualInterestRate(
@@ -1132,11 +1124,7 @@ contract BorrowerOperations is
                 interestBatchManager.minInterestRateChangePeriod
             )
         );
-        if (!success) {
-            assembly {
-                revert(add(0x20, data), mload(data))
-            }
-        }
+        _requireDelegateCallSucceeded(success, data);
     }
 
     function setInterestBatchManager(
@@ -1166,11 +1154,7 @@ contract BorrowerOperations is
                 _maxUpfrontFee
             )
         );
-        if (!success) {
-            assembly {
-                revert(add(0x20, data), mload(data))
-            }
-        }
+        _requireDelegateCallSucceeded(success, data);
     }
 
     function kickFromBatch(
@@ -1187,11 +1171,7 @@ contract BorrowerOperations is
                 _lowerHint
             )
         );
-        if (!success) {
-            assembly {
-                revert(add(0x20, data), mload(data))
-            }
-        }
+        _requireDelegateCallSucceeded(success, data);
     }
 
     function removeFromBatch(
@@ -1212,11 +1192,7 @@ contract BorrowerOperations is
                 _maxUpfrontFee
             )
         );
-        if (!success) {
-            assembly {
-                revert(add(0x20, data), mload(data))
-            }
-        }
+        _requireDelegateCallSucceeded(success, data);
     }
 
     function switchBatchManager(
@@ -1800,6 +1776,14 @@ contract BorrowerOperations is
     function _requireSelf() internal view {
         if (msg.sender != address(this)) {
             revert CallerNotSelf();
+        }
+    }
+
+    function _requireDelegateCallSucceeded(bool success, bytes memory data) internal view {
+        if (!success) {
+            assembly {
+                revert(add(0x20, data), mload(data))
+            }
         }
     }
 
