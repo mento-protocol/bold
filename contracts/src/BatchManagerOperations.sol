@@ -339,8 +339,6 @@ contract BatchManagerOperations is IBatchManagerOperations {
             _newAnnualInterestRate = vars.batch.annualInterestRate;
         }
 
-        IBorrowerOperations(address(this)).removeTroveFromBatch(_troveId);
-
         if (!_checkTroveIsZombie(vars.troveManager, _troveId)) {
             // Remove trove from Batch in SortedTroves
             vars.sortedTroves.removeFromBatch(_troveId);

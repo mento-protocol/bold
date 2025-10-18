@@ -1180,6 +1180,7 @@ contract BorrowerOperations is
             )
         );
         _requireDelegateCallSucceeded(success, data);
+        delete interestBatchManagerOf[_troveId];
     }
 
     function switchBatchManager(
@@ -1383,13 +1384,6 @@ contract BorrowerOperations is
         address _batchManager
     ) external view returns (bool) {
         return interestBatchManagers[_batchManager].maxInterestRate > 0;
-    }
-
-    // --- Callback functions for BorrowerOperationsBatchManager ---
-
-    function removeTroveFromBatch(uint256 _troveId) external {
-        _requireSelf();
-        delete interestBatchManagerOf[_troveId];
     }
 
     // --- 'Require' wrapper functions ---
@@ -1738,12 +1732,6 @@ contract BorrowerOperations is
     function _requireCallerIsPriceFeed() internal view {
         if (msg.sender != address(priceFeed)) {
             revert CallerNotPriceFeed();
-        }
-    }
-
-    function _requireSelf() internal view {
-        if (msg.sender != address(this)) {
-            revert CallerNotSelf();
         }
     }
 
