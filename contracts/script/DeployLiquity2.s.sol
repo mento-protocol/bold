@@ -251,16 +251,16 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
                 )
         );
 
-        r.exchangeHelpersV2 = new HybridCurveUniV3ExchangeHelpersV2({
-            _usdc: address(USDC),
-            _weth: address(WETH),
-            _curvePool: r.usdcCurvePool,
-            _usdcIndex: int128(OTHER_TOKEN_INDEX),
-            _boldIndex: int128(BOLD_TOKEN_INDEX),
-            _feeUsdcWeth: UNIV3_FEE_USDC_WETH,
-            _feeWethColl: UNIV3_FEE_WETH_COLL,
-            _uniV3Quoter: uniV3Quoter
-        });
+        // r.exchangeHelpersV2 = new HybridCurveUniV3ExchangeHelpersV2({
+        //     _usdc: address(USDC),
+        //     _weth: address(WETH),
+        //     _curvePool: r.usdcCurvePool,
+        //     _usdcIndex: int128(OTHER_TOKEN_INDEX),
+        //     _boldIndex: int128(BOLD_TOKEN_INDEX),
+        //     _feeUsdcWeth: UNIV3_FEE_USDC_WETH,
+        //     _feeWethColl: UNIV3_FEE_WETH_COLL,
+        //     _uniV3Quoter: uniV3Quoter
+        // });
     }
 
     function _deployStableToken(DeploymentResult memory r) internal {
@@ -526,7 +526,11 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             string.concat('"constants":', _getDeploymentConstants(deployed.contracts.systemParams), ","),
             string.concat('"collateralRegistry":"', address(deployed.collateralRegistry).toHexString(), '",'),
             string.concat('"boldToken":"', address(deployed.stableToken).toHexString(), '",'),
-            string.concat('"hintHelpers":"', address(deployed.hintHelpers).toHexString(), '",')
+            string.concat('"hintHelpers":"', address(deployed.hintHelpers).toHexString(), '",'),
+            string.concat('"multiTroveGetter":"', address(deployed.multiTroveGetter).toHexString(), '",'),
+            string.concat('"debtInFrontHelper":"', address(deployed.debtInFrontHelper).toHexString(), '",'),
+            string.concat('"exchangeHelpers":"', address(deployed.exchangeHelpers).toHexString(), '",'),
+            string.concat('"exchangeHelpersV2":"', address(deployed.exchangeHelpersV2).toHexString(), '",')
         );
 
         string memory part2 = string.concat(
@@ -540,20 +544,6 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         string memory part3 = string.concat(
             string.concat('"fpmm":"', address(deployed.fpmm).toHexString(), '",'),
             string.concat('"branches":[', branches.join(","), "]"),
-            string.concat(
-                string.concat('"constants":', _getDeploymentConstants(), ","),
-                string.concat('"collateralRegistry":"', address(deployed.collateralRegistry).toHexString(), '",'),
-                string.concat('"boldToken":"', address(deployed.boldToken).toHexString(), '",'),
-                string.concat('"hintHelpers":"', address(deployed.hintHelpers).toHexString(), '",'),
-                string.concat('"multiTroveGetter":"', address(deployed.multiTroveGetter).toHexString(), '",'),
-                string.concat('"debtInFrontHelper":"', address(deployed.debtInFrontHelper).toHexString(), '",'),
-                string.concat('"exchangeHelpers":"', address(deployed.exchangeHelpers).toHexString(), '",'),
-                string.concat('"exchangeHelpersV2":"', address(deployed.exchangeHelpersV2).toHexString(), '",')
-            ),
-            string.concat(
-                string.concat('"branches":[', branches.join(","), "],"),
-                string.concat('"governance":', _governanceManifest, "") // no comma
-            ),
             "}"
         );
 

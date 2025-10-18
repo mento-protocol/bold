@@ -9,6 +9,9 @@ uint256 constant DECIMAL_PRECISION = 1e18;
 uint256 constant _100pct = DECIMAL_PRECISION;
 uint256 constant _1pct = DECIMAL_PRECISION / 100;
 
+// Amount of ETH to be locked in gas pool on opening troves
+uint256 constant ETH_GAS_COMPENSATION = 0.0375 ether;
+
 uint256 constant ONE_MINUTE = 1 minutes;
 uint256 constant ONE_YEAR = 365 days;
 
