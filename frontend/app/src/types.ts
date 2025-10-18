@@ -5,7 +5,7 @@ import type { BranchContracts } from "./contracts";
 
 export type { Address, CollateralSymbol, Dnum, Token, TokenSymbol };
 
-export type RiskLevel = "low" | "medium" | "high";
+export type RiskLevel = "low" | "medium" | "high" | "not-applicable";
 
 export type ChainId = number;
 
@@ -70,21 +70,23 @@ export type PositionLoanBase = {
   branchId: BranchId;
   deposit: Dnum;
   interestRate: Dnum;
-  status: TroveStatus;
 };
 
 export type PositionLoanCommitted = PositionLoanBase & {
+  status: TroveStatus;
   troveId: TroveId;
   createdAt: number;
   lastUserActionAt: number;
+  updatedAt: number;
   isZombie: boolean;
-  indexedDebt: Dnum;
+  recordedDebt: Dnum;
   redemptionCount: number;
   redeemedColl: Dnum;
   redeemedDebt: Dnum;
 };
 
 export type PositionLoanUncommitted = PositionLoanBase & {
+  status: "active";
   troveId: null;
 };
 
@@ -181,12 +183,17 @@ export type Initiative =
   & {
     address: Address;
     name: string | null;
-    protocol: string | null;
+    group: string | null;
     url: string | null;
   }
   & (
-    | { tvl: Dnum; pairVolume: Dnum; votesDistribution: Dnum }
-    | { tvl: null; pairVolume: null; votesDistribution: null }
+    {
+      isBribeInitiative: true;
+      bribeToken: Address;
+    } | {
+      isBribeInitiative: false;
+      bribeToken: null;
+    }
   );
 
 export type Vote = "for" | "against";

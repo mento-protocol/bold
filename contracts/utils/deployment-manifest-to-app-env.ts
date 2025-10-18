@@ -30,15 +30,15 @@ const argv = minimist(process.argv.slice(2), {
   ],
 });
 
-const ZERO_ADDRESS = "0x" + "0".repeat(40);
-
 const ZAddress = z.string().regex(/^0x[0-9a-fA-F]{40}$/);
 const ZDeploymentManifest = z.object({
   collateralRegistry: ZAddress,
   boldToken: ZAddress,
   hintHelpers: ZAddress,
   multiTroveGetter: ZAddress,
+  debtInFrontHelper: ZAddress,
   exchangeHelpers: ZAddress,
+  exchangeHelpersV2: ZAddress,
 
   governance: z.object({
     LUSDToken: ZAddress,
@@ -183,8 +183,12 @@ function contractNameToAppEnvVariable(contractName: string, prefix: string = "")
       return `${prefix}_HINT_HELPERS`;
     case "multiTroveGetter":
       return `${prefix}_MULTI_TROVE_GETTER`;
+    case "debtInFrontHelper":
+      return `${prefix}_DEBT_IN_FRONT_HELPER`;
     case "exchangeHelpers":
       return `${prefix}_EXCHANGE_HELPERS`;
+    case "exchangeHelpersV2":
+      return `${prefix}_EXCHANGE_HELPERS_V2`;
 
     // collateral contracts
     case "activePool":

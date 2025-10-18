@@ -4,6 +4,7 @@ import { Amount } from "@/src/comps/Amount/Amount";
 import { ETH_GAS_COMPENSATION } from "@/src/constants";
 import { dnum18 } from "@/src/dnum-utils";
 import { fmtnum } from "@/src/formatting";
+import { useDelegateDisplayName } from "@/src/liquity-delegate";
 import {
   getBranch,
   getCollToken,
@@ -96,6 +97,7 @@ export const openBorrowPosition: FlowDeclaration<OpenBorrowPositionRequest> = {
 
     const { branchId, interestRateDelegate, boldAmount } = request;
     const delegate = useInterestBatchDelegate(branchId, interestRateDelegate);
+    const delegateDisplayName = useDelegateDisplayName(interestRateDelegate);
     const yearlyBoldInterest = dn.mul(
       boldAmount,
       dn.add(request.annualInterestRate, delegate.data?.fee ?? 0),
@@ -138,7 +140,7 @@ export const openBorrowPosition: FlowDeclaration<OpenBorrowPositionRequest> = {
                 value={upfrontFee.data}
                 suffix=" BOLD creation fee"
               />
-              <InfoTooltip heading="BOLD Creation Fee">
+              <InfoTooltip heading="BOLD creation fee">
                 This fee is charged when you open a new loan or increase your debt. It corresponds to 7 days of average
                 interest for the respective collateral asset.
               </InfoTooltip>
@@ -153,6 +155,7 @@ export const openBorrowPosition: FlowDeclaration<OpenBorrowPositionRequest> = {
                 <AccountButton
                   key="start"
                   address={request.interestRateDelegate}
+                  displayName={delegateDisplayName}
                 />,
                 <div key="end">
                   {delegate.isLoading

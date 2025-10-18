@@ -3,12 +3,21 @@ import type { Dnum } from "dnum";
 
 import { useAppear } from "@/src/anim-utils";
 import { useBreakpointName } from "@/src/breakpoints";
-import { INTEREST_RATE_START, REDEMPTION_RISK } from "@/src/constants";
+import { INTEREST_RATE_MAX, INTEREST_RATE_START, REDEMPTION_RISK } from "@/src/constants";
 import content from "@/src/content";
 import { DNUM_0, jsonStringifyWithDnum } from "@/src/dnum-utils";
 import { useInputFieldValue } from "@/src/form-utils";
 import { fmtnum } from "@/src/formatting";
-import { findClosestRateIndex, getBranch, useAverageInterestRate, useInterestRateChartData } from "@/src/liquity-utils";
+import { useDelegateDisplayName } from "@/src/liquity-delegate";
+import { getRedemptionRisk } from "@/src/liquity-math";
+import {
+  EMPTY_LOAN,
+  findClosestRateIndex,
+  useAverageInterestRate,
+  useDebtInFrontOfInterestRate,
+  useDebtInFrontOfLoan,
+  useInterestRateChartData,
+} from "@/src/liquity-utils";
 import { infoTooltipProps } from "@/src/uikit-utils";
 import { noop } from "@/src/utils";
 import { css } from "@/styled-system/css";
@@ -20,15 +29,11 @@ import Image from "next/image";
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { match } from "ts-pattern";
 import { DelegateModal } from "./DelegateModal";
-import { IcStrategiesModal } from "./IcStrategiesModal";
 import { MiniChart } from "./MiniChart";
-
-import icLogo from "./ic-logo.svg";
 
 const DELEGATE_MODES = [
   "manual",
   "delegate",
-  "strategy",
 ] as const;
 
 export type DelegateMode = typeof DELEGATE_MODES[number];
@@ -57,15 +62,18 @@ export const InterestRateField = memo(
     inputId?: string;
     interestRate: Dnum | null;
     mode: DelegateMode;
-    onAverageInterestRateLoad?: (averageInterestRate: Dnum) => void;
+    // XXX why is average interest rate loaded inside this component and not the parent?
+    onAverageInterestRateLoad?: (averageInterestRate: Dnum, setValue: (value: string) => void) => void;
     onChange: (interestRate: Dnum) => void;
     onDelegateChange: (delegate: Address | null) => void;
     onModeChange?: (mode: DelegateMode) => void;
     loan?: PositionLoanCommitted;
   }) {
     const [delegatePicker, setDelegatePicker] = useState<
-      "strategy" | "delegate" | null
+      "delegate" | null
     >(null);
+
+    const delegateDisplayName = useDelegateDisplayName(delegate);
 
     const autoInputId = useId();
     const inputId = inputIdFromProps ?? autoInputId;
@@ -87,7 +95,7 @@ export const InterestRateField = memo(
         rateTouchedForBranch.current = branchId;
         setTimeout(() => {
           if (averageInterestRate.data && !cancelled) {
-            onAverageInterestRateLoad(averageInterestRate.data);
+            onAverageInterestRateLoad(averageInterestRate.data, fieldValue.setValue);
           }
         }, 0);
         return () => {
@@ -102,25 +110,27 @@ export const InterestRateField = memo(
 
     useEffect(() => {
       setDelegatePicker(null);
-      onDelegateChange(null);
-      onModeChange("manual");
+      if (!delegate) {
+        onDelegateChange(null);
+        onModeChange("manual");
+      }
     }, [
       branchId,
+      delegate,
       onDelegateChange,
       onModeChange,
     ]);
 
     const fieldValue = useInputFieldValue((value) => `${fmtnum(value)}%`, {
+      defaultValue: interestRate ? dn.toString(dn.mul(interestRate, 100)) : undefined,
+
       onFocusChange: ({ parsed, focused }) => {
         if (!focused && parsed) {
-          const rounded = dn.div(dn.round(dn.mul(parsed, 10)), 10);
-          fieldValue.setValue(
-            rounded[0] === 0n
-              ? String(INTEREST_RATE_START * 100)
-              : dn.toString(rounded),
-          );
+          if (dn.lt(parsed, INTEREST_RATE_START * 100)) fieldValue.setValue(String(INTEREST_RATE_START * 100));
+          if (dn.gt(parsed, INTEREST_RATE_MAX * 100)) fieldValue.setValue(String(INTEREST_RATE_MAX * 100));
         }
       },
+
       onChange: ({ parsed }) => {
         if (parsed) {
           rateTouchedForBranch.current = branchId;
@@ -130,25 +140,35 @@ export const InterestRateField = memo(
     });
 
     const interestChartData = useInterestRateChartData(branchId, loan);
-    const interestRateRounded = interestRate && dn.div(dn.round(dn.mul(interestRate, 1000)), 1000);
+    const debtInFrontOfLoan = useDebtInFrontOfLoan(loan ?? EMPTY_LOAN);
+    const debtInFrontOfInterestRate = useDebtInFrontOfInterestRate(branchId, interestRate ?? DNUM_0, loan);
 
-    const bracket = interestRateRounded && interestChartData.data?.find(
-      ({ rate }) => rate[0] === interestRateRounded[0],
-    );
+    // When a loan exists already and the selected interest rate is the same as the existing interest rate
+    // (for example as in the initial state after navigating to the interest rate panel)
+    // show the current precise debt-in-front of the loan.
+    // This is useful for checking how far the loan is from redemption (beyond just checking the risk level).
+    // If the loan is not redeemable, e.g. because it has been fully redeemed, we revert to debt-in-front
+    // based on interest rate (i.e. the debt that would be in front of the position if it were to be made
+    // active again at its current interest rate).
+    const debtInFront = loan && interestRate && dn.eq(loan.interestRate, interestRate)
+      ? debtInFrontOfLoan.data && (
+        debtInFrontOfLoan.data.debtInFront
+          ? debtInFrontOfLoan.data // redeemable (debtInFront not null)
+          : debtInFrontOfInterestRate.data // not redeemable (debtInFront is null)
+      )
+      : debtInFrontOfInterestRate.data;
 
-    const redeemableTransition = useAppear(bracket?.debtInFront !== undefined);
+    const redemptionRisk = debtInFront
+      && getRedemptionRisk(debtInFront.debtInFront, debtInFront.totalDebt);
+    const redeemableTransition = useAppear(debtInFront !== undefined);
 
     const handleDelegateSelect = (delegate: Delegate) => {
       setDelegatePicker(null);
-      rateTouchedForBranch.current = branchId;
-      onChange(delegate.interestRate);
+      fieldValue.setValue(dn.toString(dn.mul(delegate.interestRate, 100)));
       onDelegateChange(delegate.address ?? null);
     };
 
-    const branch = getBranch(branchId);
-
-    const hasStrategies = branch.strategies.length > 0;
-    const activeDelegateModes = DELEGATE_MODES.filter((mode) => mode !== "strategy" || hasStrategies);
+    const activeDelegateModes = DELEGATE_MODES;
 
     const boldInterestPerYear = interestRate && debt && dn.mul(interestRate, debt);
 
@@ -167,38 +187,13 @@ export const InterestRateField = memo(
                 interestChartData={interestChartData}
                 interestRate={interestRate}
                 fieldValue={fieldValue}
-              />
-            ))
-            .with("strategy", () => (
-              <TextButton
-                size="large"
-                label={delegate
-                  ? (
-                    <div
-                      title={delegate}
-                      className={css({
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                      })}
-                    >
-                      <Image
-                        alt=""
-                        src={icLogo}
-                        width={24}
-                        height={24}
-                        className={css({
-                          display: "block",
-                          borderRadius: 4,
-                        })}
-                      />
-                      {shortenAddress(delegate, 4).toLowerCase()}
-                    </div>
-                  )
-                  : "Choose strategy"}
-                onClick={() => {
-                  setDelegatePicker("strategy");
-                }}
+                handleColor={redemptionRisk && (
+                  redemptionRisk === "high"
+                    ? 0
+                    : redemptionRisk === "medium"
+                    ? 1
+                    : 2
+                )}
               />
             ))
             .with("delegate", () => (
@@ -226,7 +221,12 @@ export const InterestRateField = memo(
                           borderRadius: 4,
                         })}
                       />
-                      {shortenAddress(delegate, 4).toLowerCase()}
+                      {(() => {
+                        const displayName = delegateDisplayName || shortenAddress(delegate, 4).toLowerCase();
+                        return breakpoint === "small" && displayName.length > 16
+                          ? displayName.substring(0, 16) + "..."
+                          : displayName;
+                      })()}
                     </div>
                   )
                   : "Choose delegate"}
@@ -252,21 +252,21 @@ export const InterestRateField = memo(
                       size="small"
                       title={`Set average interest rate (${
                         fmtnum(averageInterestRate.data, {
-                          preset: "pct1z",
+                          preset: "pct2z",
                           suffix: "%",
                         })
                       })`}
                       label={`(avg. ${
                         fmtnum(averageInterestRate.data, {
-                          preset: "pct1z",
+                          preset: "pct2z",
                           suffix: "%",
                         })
                       })`}
                       onClick={(event) => {
                         if (averageInterestRate.data) {
                           event.preventDefault();
-                          rateTouchedForBranch.current = branchId;
-                          onChange(averageInterestRate.data);
+                          const rounded = dn.div(dn.round(dn.mul(averageInterestRate.data, 1e4)), 1e4);
+                          fieldValue.setValue(dn.toString(dn.mul(rounded, 100)));
                         }
                       }}
                     />
@@ -328,7 +328,7 @@ export const InterestRateField = memo(
                 <a.div
                   title={`Redeemable before you: ${
                     (mode === "manual" || delegate !== null)
-                      ? fmtnum(bracket?.debtInFront, "compact")
+                      ? fmtnum(debtInFront?.debtInFront, "compact")
                       : "−"
                   } BOLD`}
                   className={css({
@@ -347,7 +347,7 @@ export const InterestRateField = memo(
                       })}
                     >
                       {(mode === "manual" || delegate !== null)
-                        ? fmtnum(bracket?.debtInFront, "compact")
+                        ? fmtnum(debtInFront?.debtInFront, "compact")
                         : "−"}
                     </span>
                     {breakpoint === "large" && <span>{" BOLD"}</span>}
@@ -384,7 +384,7 @@ export const InterestRateField = memo(
                   >
                     {(mode === "manual" || delegate !== null) && fmtnum(
                       interestRate,
-                      "pct1z",
+                      "pct2z",
                     )}
                   </span>
                   <span
@@ -396,7 +396,7 @@ export const InterestRateField = memo(
                       },
                     })}
                   >
-                    %{breakpoint === "large" ? " per year" : ""}
+                    %
                   </span>
                 </span>
               )
@@ -411,14 +411,6 @@ export const InterestRateField = memo(
           onSelectDelegate={handleDelegateSelect}
           visible={delegatePicker === "delegate"}
         />
-        <IcStrategiesModal
-          branchId={branchId}
-          onClose={() => {
-            setDelegatePicker(null);
-          }}
-          onSelectDelegate={handleDelegateSelect}
-          visible={delegatePicker === "strategy"}
-        />
       </>
     );
   },
@@ -429,9 +421,10 @@ export const InterestRateField = memo(
 
 function ManualInterestRateSlider({
   fieldValue,
+  handleColor,
   interestChartData,
   interestRate,
-}: {
+}: Pick<Parameters<typeof Slider>[0], "handleColor"> & {
   fieldValue: ReturnType<typeof useInputFieldValue>;
   interestChartData: ReturnType<typeof useInterestRateChartData>;
   interestRate: Dnum | null;
@@ -517,7 +510,7 @@ function ManualInterestRateSlider({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          width: breakpoint === "large" ? 260 : 200,
+          width: breakpoint === "small" ? 200 : 260,
           paddingTop: 16,
           ...style,
         }}
@@ -525,17 +518,12 @@ function ManualInterestRateSlider({
         <Slider
           gradient={gradientStops}
           gradientMode="high-to-low"
+          handleColor={handleColor}
           chart={interestChartData.data?.map(({ size }) => size) ?? []}
           onChange={(value) => {
             if (interestChartData.data) {
-              const index = Math.min(
-                interestChartData.data.length - 1,
-                Math.round(value * (interestChartData.data.length)),
-              );
-              fieldValue.setValue(String(dn.toNumber(dn.mul(
-                interestChartData.data[index]?.rate ?? DNUM_0,
-                100,
-              ))));
+              const index = Math.round(value * (interestChartData.data.length - 1));
+              fieldValue.setValue(dn.toString(dn.mul(interestChartData.data[index]?.rate ?? DNUM_0, 100)));
             }
           }}
           value={value}

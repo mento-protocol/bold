@@ -236,9 +236,23 @@ Indicates a specific deployment variant (e.g., "preview"). This will be displaye
 NEXT_PUBLIC_DEPLOYMENT_FLAVOR=preview
 ```
 
+### `NEXT_PUBLIC_KNOWN_DELEGATES_URL`
+
+URL to fetch known interest rate delegates from (optional).
+
+```dosini
+# Default
+NEXT_PUBLIC_KNOWN_DELEGATES_URL=https://api.liquity.org/v2/known-delegates/ethereum.json
+```
+
 ### `NEXT_PUBLIC_KNOWN_INITIATIVES_URL`
 
 URL for fetching known initiatives data (optional).
+
+```dosini
+# Example
+NEXT_PUBLIC_KNOWN_INITIATIVES_URL=https://api.liquity.org/v2/known-initiatives/ethereum.json
+```
 
 ### `NEXT_PUBLIC_LIQUITY_STATS_URL`
 
@@ -260,10 +274,10 @@ NEXT_PUBLIC_LIQUITY_GOVERNANCE_URL=https://api.liquity.org/v2/governance
 
 ### `NEXT_PUBLIC_SAFE_API_URL`
 
-URL for the Safe transaction service API.
+URL for the Safe transaction service API (optional). Can be disabled by passing an empty string, for example during local development via Anvil.
 
 ```dosini
-# Example
+# Default
 NEXT_PUBLIC_SAFE_API_URL=https://safe-transaction-mainnet.safe.global/api
 ```
 
@@ -274,6 +288,15 @@ URL for The Graph protocol subgraph queries.
 ```dosini
 # Example
 NEXT_PUBLIC_SUBGRAPH_URL=https://api.studio.thegraph.com/query/…
+```
+
+### `NEXT_PUBLIC_SUBGRAPH_ORIGIN`
+
+When using a subgraph URL that's restricted to set of domains which are allowed to execute queries, this must be set to one of the allowed domains. When fetching the schema of the subgraph during build, this domain will be sent as HTTP origin. Otherwise, the build will fail.
+
+```dosini
+# Example
+NEXT_PUBLIC_SUBGRAPH_ORIGIN=https://example.com
 ```
 
 ### `NEXT_PUBLIC_VERCEL_ANALYTICS`
@@ -296,6 +319,7 @@ An optional set of names and URLs (of the form `<name>|<url>`) of external apps 
 Currently, only the indices `_0` and `_1` are supported.
 
 Defaults to the following values:
+
 ```dosini
 NEXT_PUBLIC_TROVE_EXPLORER_0=DeFi Explore|https://liquityv2.defiexplore.com/trove/{branch}/{troveId}
 NEXT_PUBLIC_TROVE_EXPLORER_1=Rails|https://rails.finance/explorer/trove/{troveId}/{branch}

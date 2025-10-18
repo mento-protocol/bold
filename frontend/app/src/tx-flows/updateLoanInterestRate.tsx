@@ -4,6 +4,7 @@ import type { FlowDeclaration } from "@/src/services/TransactionFlow";
 import { Amount } from "@/src/comps/Amount/Amount";
 import { dnum18 } from "@/src/dnum-utils";
 import { fmtnum } from "@/src/formatting";
+import { useDelegateDisplayName } from "@/src/liquity-delegate";
 import {
   getBranch,
   getTroveOperationHints,
@@ -28,6 +29,7 @@ const RequestSchema = createRequestSchema(
   {
     prevLoan: vPositionLoanCommited(),
     loan: vPositionLoanCommited(),
+    leverageMode: v.boolean(),
   },
 );
 
@@ -37,7 +39,7 @@ export const updateLoanInterestRate: FlowDeclaration<UpdateLoanInterestRateReque
   title: "Review & Send Transaction",
 
   Summary({ request }) {
-    const { loan, prevLoan } = request;
+    const { loan, prevLoan, leverageMode } = request;
     const upfrontFee = usePredictAdjustInterestRateUpfrontFee(
       loan.branchId,
       loan.troveId,
@@ -55,7 +57,7 @@ export const updateLoanInterestRate: FlowDeclaration<UpdateLoanInterestRateReque
 
     return (
       <LoanCard
-        leverageMode={false}
+        leverageMode={leverageMode}
         loadingState={loadingState}
         loan={{
           ...loan,
@@ -81,12 +83,14 @@ export const updateLoanInterestRate: FlowDeclaration<UpdateLoanInterestRateReque
     );
 
     const delegate = useInterestBatchDelegate(loan.branchId, loan.batchManager);
+    const delegateDisplayName = useDelegateDisplayName(loan.batchManager);
     const yearlyBoldInterest = dn.mul(
       loan.borrowed,
       dn.add(loan.interestRate, delegate.data?.fee ?? 0),
     );
 
     const prevDelegate = useInterestBatchDelegate(loan.branchId, prevLoan.batchManager);
+    const prevDelegateDisplayName = useDelegateDisplayName(prevLoan.batchManager);
     const prevYearlyBoldInterest = dn.mul(
       prevLoan.borrowed,
       dn.add(prevLoan.interestRate, prevDelegate.data?.fee ?? 0),
@@ -97,7 +101,7 @@ export const updateLoanInterestRate: FlowDeclaration<UpdateLoanInterestRateReque
         <TransactionDetailsRow
           label="Interest rate delegate"
           value={[
-            <AccountButton key="start" address={loan.batchManager} />,
+            <AccountButton key="start" address={loan.batchManager} displayName={delegateDisplayName} />,
             <div key="end">
               {delegate.isLoading
                 ? "Loading…"
@@ -159,7 +163,7 @@ export const updateLoanInterestRate: FlowDeclaration<UpdateLoanInterestRateReque
                     textDecoration: "line-through",
                   })}
                 >
-                  <AccountButton address={prevLoan.batchManager} />
+                  <AccountButton address={prevLoan.batchManager} displayName={prevDelegateDisplayName} />
                 </div>,
                 <div
                   key="end"

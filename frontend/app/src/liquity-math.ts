@@ -1,16 +1,16 @@
 import type { LoanDetails, RiskLevel } from "@/src/types";
 import type { Dnum } from "dnum";
 
-import { LTV_RISK, MAX_LTV_ALLOWED_RATIO, REDEMPTION_RISK } from "@/src/constants";
+import { LEVERAGE_FACTOR_PRECISION, LTV_RISK, MAX_LTV_ALLOWED_RATIO, REDEMPTION_RISK } from "@/src/constants";
 import * as dn from "dnum";
 import { match } from "ts-pattern";
 
 export function getRedemptionRisk(
-  debtInFront: Dnum | null,
-  totalDebt: Dnum | null,
-): null | RiskLevel {
-  if (!debtInFront || !totalDebt || dn.eq(totalDebt, 0)) {
-    return null;
+  debtInFront: Dnum,
+  totalDebt: Dnum,
+): RiskLevel {
+  if (dn.eq(totalDebt, 0)) {
+    return "not-applicable";
   }
 
   const debtInFrontRatio = dn.div(debtInFront, totalDebt);
@@ -27,6 +27,7 @@ export function getLiquidationRisk(ltv: Dnum, maxLtv: Dnum): RiskLevel {
     .returnType<RiskLevel>()
     .when((ltv) => dn.gt(ltv, dn.mul(maxLtv, LTV_RISK.high)), () => "high")
     .when((ltv) => dn.gt(ltv, dn.mul(maxLtv, LTV_RISK.medium)), () => "medium")
+    .when((ltv) => dn.eq(ltv, 0), () => "not-applicable")
     .otherwise(() => "low");
 }
 
@@ -46,6 +47,13 @@ export function getLeverageFactorFromLtv(ltv: Dnum): number {
   return 1 / (1 - dn.toNumber(ltv));
 }
 
+export function roundLeverageFactor(leverageFactor: number) {
+  return Math.round(
+    leverageFactor
+      / LEVERAGE_FACTOR_PRECISION,
+  ) * LEVERAGE_FACTOR_PRECISION;
+}
+
 export function getLeverageFactorFromLiquidationPrice(
   liquidationPrice: Dnum,
   collPrice: Dnum,
@@ -53,16 +61,19 @@ export function getLeverageFactorFromLiquidationPrice(
 ): null | number {
   const collPriceRatio = dn.mul(collPrice, minCollRatio);
 
-  if (!dn.lt(liquidationPrice, collPriceRatio)) {
+  if (dn.gte(liquidationPrice, collPriceRatio)) {
     return null;
   }
 
-  return Math.round(
-    dn.toNumber(dn.div(
+  return dn.toNumber(
+    dn.div(
       collPriceRatio,
-      dn.sub(collPriceRatio, liquidationPrice),
-    )) * 10,
-  ) / 10;
+      dn.sub(
+        collPriceRatio,
+        liquidationPrice,
+      ),
+    ),
+  );
 }
 
 export function getLiquidationPriceFromLeverage(

@@ -12,6 +12,13 @@ export function dnum18(value: string | bigint | number | null | undefined): Dnum
   return value === undefined || value === null ? null : [BigInt(value), 18];
 }
 
+export function dnum36(value: null | undefined): null;
+export function dnum36(value: string | bigint | number): Dnum;
+export function dnum36(value: string | bigint | number | null | undefined): Dnum | null;
+export function dnum36(value: string | bigint | number | null | undefined): Dnum | null {
+  return value === undefined || value === null ? null : [BigInt(value), 36];
+}
+
 export function dnumOrNull(value: Numberish | null | undefined, decimals: number): Dnum | null {
   if (value == null || value === undefined) {
     return null;
@@ -29,6 +36,10 @@ export function dnumMax(a: Dnum, ...rest: Dnum[]) {
 
 export function dnumMin(a: Dnum, ...rest: Dnum[]) {
   return rest.reduce((min, value) => dn.lt(value, min) ? value : min, a);
+}
+
+export function dnumNeg(value: Dnum): Dnum {
+  return [-value[0], value[1]];
 }
 
 export const jsonStringifyWithDnum: typeof JSON.stringify = (data, replacer, space) => {

@@ -140,28 +140,6 @@ export default {
         label: "Delegated",
         secondary: <>The interest rate is set and updated by a third party of your choice. They may charge a fee.</>,
       },
-      strategy: {
-        label: "Autonomous Rate Manager",
-        secondary: (
-          <>
-            The interest rate is set and updated by an automated strategy running on the Internet Computer (ICP).
-          </>
-        ),
-      },
-    },
-
-    icStrategyModal: {
-      title: (
-        <>
-          Autonomous Rate Manager (ARM)
-        </>
-      ),
-      intro: (
-        <>
-          These strategies are run on the Internet Computer (ICP). They are automated and decentralized. More strategies
-          may be added over time.
-        </>
-      ),
     },
 
     delegatesModal: {
@@ -185,10 +163,10 @@ export default {
         You are repaying your debt and closing the position. The deposit will be returned to your wallet.
       </>
     ),
-    repayWithCollateralMessage: (
+    repayWithCollateralMessage: (collateralName: string) => (
       <>
-        To close your position, a part of your collateral will be sold to pay back the debt. The rest of your collateral
-        will be returned to your wallet.
+        To close your position, part of your {collateralName}{" "}
+        will be sold to pay back the debt. The rest will be returned to your wallet.
       </>
     ),
     buttonRepayAndClose: "Repay & close",
@@ -277,9 +255,6 @@ export default {
     borrowField: {
       label: "Loan",
     },
-    liquidationPriceField: {
-      label: "ETH liquidation price",
-    },
     interestRateField: {
       label: "Interest rate",
     },
@@ -299,10 +274,10 @@ export default {
       </>
     ),
     depositField: {
-      label: "You deposit",
+      label: "Deposit",
     },
     liquidationPriceField: {
-      label: "ETH liquidation price",
+      label: "Liquidation price",
     },
     interestRateField: {
       label: "Interest rate",
@@ -484,10 +459,33 @@ export default {
       title: "Allocate your voting power",
       intro: (
         <>
-          Direct incentives from Liquity V2 protocol revenues towards liquidity providers for BOLD. Upvote from Thursday
-          to Tuesday. Downvote all week. <Link href="https://docs.liquity.org/v2-faq/lqty-staking">Learn more</Link>
+          Vote on initiatives and direct incentives from Liquity V2 protocol revenues towards liquidity venues for BOLD.
+          Upvote from Thursday to Tuesday. Downvote all week. Get and claim bribes for some of them.
         </>
       ),
+      resources: {
+        overview: {
+          description: "Learn more about voting accrual, initiative and protocol incentivized liquidity (PIL).",
+          linkText: "LQTY Voting & Staking in V2",
+          linkUrl: "https://docs.liquity.org/v2-faq/lqty-staking",
+        },
+        discuss: {
+          description: "Overview over the PIL initiatives – propose and discuss initiatives.",
+          linkText: "Protocol Incentivized Liquidy (PIL) Initiatives",
+          linkUrl: "https://voting.liquity.org/",
+        },
+        dashboard: {
+          description: "Check Dune Dash for the weekly voting and reward distributions.",
+          linkText: "Voting stats",
+          linkUrl: "https://dune.com/liquity/protocol-incentivized-liquidity",
+        },
+        bribes: {
+          description:
+            "Initiatives can offer Bribes. Active bribing campaigns are visible below and can be claimed weekly.",
+          linkText: "Bribing Markets",
+          linkUrl: "https://www.liquity.org/blog/bribe-markets-in-liquity-v2-strategic-value-for-lqty-stakers",
+        },
+      },
     },
     infoTooltips: {
       alsoClaimRewardsDeposit: [
@@ -510,23 +508,23 @@ export default {
   },
 } as const;
 
-function Link({
-  href,
-  children,
-}: {
-  href: string;
-  children: N;
-}) {
-  const props = !href.startsWith("http") ? {} : {
-    target: "_blank",
-    rel: "noopener noreferrer",
-  };
-  return (
-    <a href={href} {...props}>
-      {children}
-    </a>
-  );
-}
+// function Link({
+//   href,
+//   children,
+// }: {
+//   href: string;
+//   children: N;
+// }) {
+//   const props = !href.startsWith("http") ? {} : {
+//     target: "_blank",
+//     rel: "noopener noreferrer",
+//   };
+//   return (
+//     <a href={href} {...props}>
+//       {children}
+//     </a>
+//   );
+// }
 
 function NoWrap({
   children,

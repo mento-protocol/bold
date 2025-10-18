@@ -33,6 +33,7 @@ import "src/DefaultPool.sol";
 import "src/GasPool.sol";
 import "src/HintHelpers.sol";
 import "src/MultiTroveGetter.sol";
+import {DebtInFrontHelper, IDebtInFrontHelper} from "src/DebtInFrontHelper.sol";
 import "src/SortedTroves.sol";
 import "src/StabilityPool.sol";
 
@@ -43,6 +44,22 @@ import "test/TestContracts/MockFXPriceFeed.sol";
 import "test/TestContracts/MetadataDeployment.sol";
 import "test/Utils/Logging.sol";
 import "test/Utils/StringEquality.sol";
+import "src/Zappers/WETHZapper.sol";
+import "src/Zappers/GasCompZapper.sol";
+import "src/Zappers/LeverageLSTZapper.sol";
+import "src/Zappers/LeverageWETHZapper.sol";
+import "src/Zappers/Modules/Exchanges/HybridCurveUniV3ExchangeHelpers.sol";
+import "src/Zappers/Modules/Exchanges/HybridCurveUniV3ExchangeHelpersV2.sol";
+import {BalancerFlashLoan} from "src/Zappers/Modules/FlashLoans/BalancerFlashLoan.sol";
+import "src/Zappers/Modules/Exchanges/Curve/ICurveStableswapNGFactory.sol";
+import "src/Zappers/Modules/Exchanges/UniswapV3/ISwapRouter.sol";
+import "src/Zappers/Modules/Exchanges/UniswapV3/IQuoterV2.sol";
+import "src/Zappers/Modules/Exchanges/UniswapV3/IUniswapV3Pool.sol";
+import "src/Zappers/Modules/Exchanges/UniswapV3/IUniswapV3Factory.sol";
+import "src/Zappers/Modules/Exchanges/UniswapV3/INonfungiblePositionManager.sol";
+import "src/Zappers/Modules/Exchanges/UniswapV3/UniPriceConverter.sol";
+import "src/Zappers/Modules/Exchanges/HybridCurveUniV3Exchange.sol";
+import {WETHTester} from "test/TestContracts/WETHTester.sol";
 import "forge-std/console2.sol";
 
 contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
@@ -118,6 +135,9 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         address stableTokenV3Impl;
         address systemParamsImpl;
         address fpmm;
+        IDebtInFrontHelper debtInFrontHelper;
+        IExchangeHelpers exchangeHelpers;
+        IExchangeHelpersV2 exchangeHelpersV2;
     }
 
     struct DeploymentConfig {
@@ -202,6 +222,7 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
             new CollateralRegistry(IBoldToken(address(r.stableToken)), collaterals, troveManagers, r.systemParams);
         r.hintHelpers = new HintHelpers(r.collateralRegistry, r.systemParams);
         r.multiTroveGetter = new MultiTroveGetter(r.collateralRegistry);
+        r.debtInFrontHelper = new DebtInFrontHelper(r.collateralRegistry, r.hintHelpers);
 
         // TODO: replace with real price feed
         IPriceFeed priceFeed = new MockFXPriceFeed();
@@ -229,6 +250,17 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
                     SALT, keccak256(bytes.concat(type(StabilityPool).creationCode, abi.encode(true, r.systemParams)))
                 )
         );
+
+        r.exchangeHelpersV2 = new HybridCurveUniV3ExchangeHelpersV2({
+            _usdc: address(USDC),
+            _weth: address(WETH),
+            _curvePool: r.usdcCurvePool,
+            _usdcIndex: int128(OTHER_TOKEN_INDEX),
+            _boldIndex: int128(BOLD_TOKEN_INDEX),
+            _feeUsdcWeth: UNIV3_FEE_USDC_WETH,
+            _feeWethColl: UNIV3_FEE_WETH_COLL,
+            _uniV3Quoter: uniV3Quoter
+        });
     }
 
     function _deployStableToken(DeploymentResult memory r) internal {
@@ -508,6 +540,20 @@ contract DeployLiquity2Script is StdCheats, MetadataDeployment, Logging {
         string memory part3 = string.concat(
             string.concat('"fpmm":"', address(deployed.fpmm).toHexString(), '",'),
             string.concat('"branches":[', branches.join(","), "]"),
+            string.concat(
+                string.concat('"constants":', _getDeploymentConstants(), ","),
+                string.concat('"collateralRegistry":"', address(deployed.collateralRegistry).toHexString(), '",'),
+                string.concat('"boldToken":"', address(deployed.boldToken).toHexString(), '",'),
+                string.concat('"hintHelpers":"', address(deployed.hintHelpers).toHexString(), '",'),
+                string.concat('"multiTroveGetter":"', address(deployed.multiTroveGetter).toHexString(), '",'),
+                string.concat('"debtInFrontHelper":"', address(deployed.debtInFrontHelper).toHexString(), '",'),
+                string.concat('"exchangeHelpers":"', address(deployed.exchangeHelpers).toHexString(), '",'),
+                string.concat('"exchangeHelpersV2":"', address(deployed.exchangeHelpersV2).toHexString(), '",')
+            ),
+            string.concat(
+                string.concat('"branches":[', branches.join(","), "],"),
+                string.concat('"governance":', _governanceManifest, "") // no comma
+            ),
             "}"
         );
 

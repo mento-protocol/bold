@@ -7,24 +7,32 @@ import { Field } from "@/src/comps/Field/Field";
 import { FlowButton } from "@/src/comps/FlowButton/FlowButton";
 import { InterestRateField } from "@/src/comps/InterestRateField/InterestRateField";
 import { UpdateBox } from "@/src/comps/UpdateBox/UpdateBox";
+import { WarningBox } from "@/src/comps/WarningBox/WarningBox";
 import content from "@/src/content";
 import { useInputFieldValue } from "@/src/form-utils";
 import { fmtnum, formatRelativeTime } from "@/src/formatting";
 import { formatRisk } from "@/src/formatting";
 import { getLoanDetails } from "@/src/liquity-math";
-import { getBranch, getCollToken, useRedemptionRisk, useTroveRateUpdateCooldown } from "@/src/liquity-utils";
+import {
+  getCollToken,
+  useRedemptionRiskOfInterestRate,
+  useRedemptionRiskOfLoan,
+  useTroveRateUpdateCooldown,
+} from "@/src/liquity-utils";
 import { usePrice } from "@/src/services/Prices";
 import { infoTooltipProps, riskLevelToStatusMode } from "@/src/uikit-utils";
 import { useAccount } from "@/src/wagmi-utils";
 import { css } from "@/styled-system/css";
-import { addressesEqual, HFlex, IconSuggestion, InfoTooltip, StatusDot } from "@liquity2/uikit";
+import { addressesEqual, Checkbox, HFlex, IconSuggestion, InfoTooltip, StatusDot } from "@liquity2/uikit";
 import * as dn from "dnum";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 export function PanelInterestRate({
   loan,
+  loanMode,
 }: {
   loan: PositionLoanCommitted;
+  loanMode: "borrow" | "multiply";
 }) {
   const account = useAccount();
 
@@ -38,16 +46,9 @@ export function PanelInterestRate({
     defaultValue: dn.toString(loan.borrowed),
   });
 
-  const { strategies } = getBranch(loan.branchId);
-
-  const { batchManager } = loan;
-  const isIcpDelegated = batchManager && strategies.some((s) => addressesEqual(s.address, batchManager));
-
   const [interestRate, setInterestRate] = useState(loan.interestRate);
   const [interestRateMode, setInterestRateMode] = useState<DelegateMode>(
-    isIcpDelegated
-      ? "strategy"
-      : loan.batchManager
+    loan.batchManager
       ? "delegate"
       : "manual",
   );
@@ -55,10 +56,15 @@ export function PanelInterestRate({
     loan.batchManager,
   );
 
+  const [agreeToLiquidationRisk, setAgreeToLiquidationRisk] = useState(false);
+  const agreeCheckboxId = useId();
+
   const updateRateCooldown = useUpdateRateCooldown(loan.branchId, loan.troveId);
 
-  const currentRedemptionRisk = useRedemptionRisk(loan.branchId, loan.interestRate);
-  const newRedemptionRisk = useRedemptionRisk(loan.branchId, interestRate);
+  const isZombieTrove = loan.isZombie;
+
+  const currentRedemptionRisk = useRedemptionRiskOfLoan(loan);
+  const newRedemptionRisk = useRedemptionRiskOfInterestRate(loan.branchId, interestRate, loan);
 
   const loanDetails = getLoanDetails(
     loan.deposit,
@@ -84,19 +90,22 @@ export function PanelInterestRate({
     && loan.borrowed
     && dn.mul(loan.borrowed, loan.interestRate);
 
+  const isDelegated = interestRateMode === "delegate" && interestRateDelegate;
   const allowSubmit = Boolean(
     account.address && addressesEqual(
       loan.borrower,
       account.address,
     ),
   )
+    && !isZombieTrove
     && deposit.parsed && dn.gt(deposit.parsed, 0)
     && debt.parsed && dn.gt(debt.parsed, 0)
     && interestRate && dn.gt(interestRate, 0)
     && (
       !dn.eq(interestRate, loan.interestRate)
       || loan.batchManager !== interestRateDelegate
-    );
+    )
+    && (newLoanDetails.status !== "at-risk" || (!isDelegated && agreeToLiquidationRisk));
 
   return (
     <>
@@ -232,6 +241,56 @@ export function PanelInterestRate({
           ]}
         />
       </div>
+
+      {newLoanDetails.status === "at-risk" && (
+        <WarningBox>
+          {isDelegated
+            ? (
+              <div>
+                When you delegate your interest rate management, your <abbr title="Loan-to-value ratio">LTV</abbr>{" "}
+                must be below{" "}
+                {fmtnum(newLoanDetails.maxLtvAllowed, "pct2z")}%. Please reduce your loan or add more collateral to
+                proceed.
+              </div>
+            )
+            : (
+              <>
+                <div>
+                  Your position's <abbr title="Loan-to-value ratio">LTV</abbr> is{" "}
+                  {fmtnum(newLoanDetails.ltv, "pct2z")}%, which is close to the maximum of{" "}
+                  {fmtnum(newLoanDetails.maxLtv, "pct2z")}%. You are at high risk of liquidation.
+                </div>
+                <label
+                  htmlFor={agreeCheckboxId}
+                  className={css({
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    cursor: "pointer",
+                  })}
+                >
+                  <Checkbox
+                    id={agreeCheckboxId}
+                    checked={agreeToLiquidationRisk}
+                    onChange={(checked) => {
+                      setAgreeToLiquidationRisk(checked);
+                    }}
+                  />
+                  I understand. Let's continue.
+                </label>
+              </>
+            )}
+        </WarningBox>
+      )}
+
+      {isZombieTrove && (
+        <WarningBox>
+          <div>
+            Interest rate can't be adjusted on loans with debt below 2,000 BOLD. Please adjust your debt first.
+          </div>
+        </WarningBox>
+      )}
+
       <FlowButton
         disabled={!allowSubmit}
         label="Update position"
@@ -244,10 +303,11 @@ export function PanelInterestRate({
           successLink: ["/", "Go to the dashboard"],
           successMessage: "The position interest rate has been updated successfully.",
 
+          leverageMode: loanMode === "multiply",
           prevLoan: { ...loan },
           loan: {
             ...loan,
-            batchManager: interestRateMode === "delegate" || interestRateMode === "strategy"
+            batchManager: interestRateMode === "delegate"
               ? interestRateDelegate
               : null,
             interestRate,

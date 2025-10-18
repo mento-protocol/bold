@@ -3,9 +3,9 @@
 import type { BranchId, ChainId, CollateralSymbol, IcStrategy, RiskLevel } from "@/src/types";
 
 import { vEnvLegacyCheck } from "@/src/valibot-utils";
-import { norm } from "@liquity2/uikit";
 import * as dn from "dnum";
 import * as v from "valibot";
+import { maxUint256 } from "viem";
 
 // make sure the icons in /public/fork-icons/
 // are 54x54px, especially for PNGs.
@@ -22,6 +22,7 @@ export const ONE_SECOND = 1000;
 export const ONE_MINUTE = 60 * ONE_SECOND;
 export const ONE_HOUR = 60 * ONE_MINUTE;
 export const ONE_DAY = 24 * ONE_HOUR;
+export const ONE_YEAR_D18 = 365n * 24n * 60n * 60n * BigInt(1e18);
 
 export const GAS_MIN_HEADROOM = 100_000;
 export const GAS_RELATIVE_HEADROOM = 0.25;
@@ -30,8 +31,10 @@ export const GAS_ALLOCATE_LQTY_MIN_HEADROOM = 350_000;
 export const LOCAL_STORAGE_PREFIX = "liquity2:";
 
 export const LEVERAGE_FACTOR_MIN = 1.1;
+export const LEVERAGE_FACTOR_DEFAULT = 1.5;
+export const LEVERAGE_FACTOR_PRECISION = 0.1;
 
-export const MAX_LTV_ALLOWED_RATIO = 0.916; // ratio of the max LTV allowed by the app (when opening a position)
+export const MAX_LTV_ALLOWED_RATIO = 0.916666667; // ratio of the max LTV allowed by the app (when opening a position)
 export const MAX_LTV_RESERVE_RATIO = 0.04; // ratio of the max LTV in non-limited mode (e.g. when updating a position), to prevent reaching the max LTV
 
 export const ETH_MAX_RESERVE = dn.from(0.1, 18); // leave 0.1 ETH when users click on "max" to deposit from their account
@@ -43,6 +46,7 @@ export const INTEREST_RATE_ADJ_COOLDOWN = 7 * 24 * 60 * 60; // 7 days in seconds
 // interest rate field config
 export const INTEREST_RATE_START = 0.005; // 0.5%
 export const INTEREST_RATE_END = 0.25; // 25%
+export const INTEREST_RATE_MAX = 2.5; // 250%
 export const INTEREST_RATE_DEFAULT = 0.1; // 10%
 export const INTEREST_RATE_PRECISE_UNTIL = 0.1; // use precise increments until 10%
 export const INTEREST_RATE_INCREMENT_PRECISE = 0.001; // 0.1% increments (precise)
@@ -54,9 +58,9 @@ export const DATA_REFRESH_INTERVAL = 30_000;
 export const PRICE_REFRESH_INTERVAL = 60_000;
 export const DATA_STALE_TIME = 5_000;
 
-export const LEVERAGE_MAX_SLIPPAGE = 0.05; // 5%
-export const CLOSE_FROM_COLLATERAL_SLIPPAGE = 0.05; // 5%
-export const MAX_UPFRONT_FEE = 1000n * 10n ** 18n;
+export const LEVERAGE_SLIPPAGE_TOLERANCE = 0.0005; // 0.05%
+export const LEVERAGE_PRICE_IMPACT_HIGH = 0.01; // 1%
+export const MAX_UPFRONT_FEE = maxUint256;
 export const MIN_DEBT = dn.from(2000, 18);
 
 export const TROVE_STATUS_NONEXISTENT = 0;
@@ -65,18 +69,12 @@ export const TROVE_STATUS_CLOSED_BY_OWNER = 2;
 export const TROVE_STATUS_CLOSED_BY_LIQUIDATION = 3;
 export const TROVE_STATUS_ZOMBIE = 4;
 
+// XXX what is the point of this?
 export const MAX_COLLATERAL_DEPOSITS: Record<CollateralSymbol, dn.Dnum> = {
   ETH: dn.from(100_000_000n, 18),
   WSTETH: dn.from(100_000_000n, 18),
   RETH: dn.from(100_000_000n, 18),
 };
-
-// LTV factor suggestions, as ratios of the multiply factor range
-export const LEVERAGE_FACTOR_SUGGESTIONS = [
-  norm(1.5, 1.1, 11), // 1.5x multiply with a 1.1x => 11x range
-  norm(2.5, 1.1, 11),
-  norm(5, 1.1, 11),
-];
 
 // DEBT suggestions, as ratios of the max LTV
 export const DEBT_SUGGESTIONS = [
@@ -86,13 +84,13 @@ export const DEBT_SUGGESTIONS = [
 ];
 
 // ltv risk levels, as ratios of the max ltv
-export const LTV_RISK: Record<Exclude<RiskLevel, "low">, number> = {
+export const LTV_RISK: Record<Exclude<RiskLevel, "low" | "not-applicable">, number> = {
   medium: 0.54,
   high: 0.73,
 };
 
 // redemption risk levels, as debt positioning ratios
-export const REDEMPTION_RISK: Record<Exclude<RiskLevel, "high">, number> = {
+export const REDEMPTION_RISK: Record<Exclude<RiskLevel, "high" | "not-applicable">, number> = {
   medium: 0.05, // 5% of total debt in front
   low: 0.60, // 60% of total debt in front
 };

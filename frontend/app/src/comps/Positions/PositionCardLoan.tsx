@@ -19,31 +19,24 @@ export function PositionCardLoan(
     | "interestRate"
     | "status"
     | "troveId"
-    | "indexedDebt"
+    | "recordedDebt"
+    | "isZombie"
   >,
 ) {
   const storedState = useStoredState();
   const prefixedTroveId = getPrefixedTroveId(props.branchId, props.troveId);
   const loanMode = storedState.loanModes[prefixedTroveId] ?? props.type;
-
   const Card = loanMode === "multiply" ? PositionCardLeverage : PositionCardBorrow;
 
   return (
     <Card
       {...props}
-      debt={!props.borrowed || props.status === "liquidated"
-        ? null
-        : props.borrowed}
-      deposit={!props.deposit || props.status === "liquidated"
-        ? null
-        : props.deposit}
-      liquidated={props.status === "liquidated"}
       statusTag={props.status === "liquidated"
         ? <LoanStatusTag status="liquidated" />
         : props.status === "redeemed"
         ? (
           <LoanStatusTag
-            status={dn.eq(props.indexedDebt, 0)
+            status={dn.eq(props.recordedDebt, 0)
               ? "fully-redeemed"
               : "partially-redeemed"}
           />
