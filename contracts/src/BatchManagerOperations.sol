@@ -63,8 +63,6 @@ contract BatchManagerOperations is IBatchManagerOperations {
             _minInterestRate,
             _maxInterestRate
         );
-        // Not needed, implicitly checked in the condition above:
-        //_requireValidAnnualInterestRate(_currentInterestRate);
         if (_annualManagementFee > MAX_ANNUAL_BATCH_MANAGEMENT_FEE) {
             revert AnnualManagementFeeTooHigh();
         }
@@ -163,6 +161,7 @@ contract BatchManagerOperations is IBatchManagerOperations {
                 batch.annualManagementFee;
 
             // Disallow a premature adjustment if it would result in TCR < CCR
+            // (which includes the case when TCR is already below CCR before the adjustment).
             uint256 newTCR = _getNewTCRFromTroveChange(batchChange, price);
             _requireNewTCRisAboveCCR(newTCR);
         }
@@ -374,7 +373,7 @@ contract BatchManagerOperations is IBatchManagerOperations {
             vars.trove.entireDebt *
             _newAnnualInterestRate;
 
-        // Apply upfront fee on premature adjustments
+        // Apply upfront fee on premature adjustments. It checks the resulting ICR
         if (
             vars.batch.annualInterestRate != _newAnnualInterestRate &&
             block.timestamp <
@@ -429,6 +428,8 @@ contract BatchManagerOperations is IBatchManagerOperations {
         return _calcInterest(_debt * _avgInterestRate, UPFRONT_INTEREST_PERIOD);
     }
 
+    // Duplicated internal function from BorrowerOperations but calls to getEntireBranchColl and getEntireBranchDebt
+    // are replaced with their implementations
     function _getNewTCRFromTroveChange(
         TroveChange memory _troveChange,
         uint256 _price
@@ -439,7 +440,12 @@ contract BatchManagerOperations is IBatchManagerOperations {
 
         uint256 activeDebt = activePool.getBoldDebt();
         uint256 closedDebt = defaultPool.getBoldDebt();
-        uint256 totalDebt = activeDebt + closedDebt + _troveChange.debtIncrease + _troveChange.upfrontFee - _troveChange.debtDecrease;
+        uint256 totalDebt =
+          activeDebt +
+          closedDebt +
+          _troveChange.debtIncrease +
+          _troveChange.upfrontFee -
+          _troveChange.debtDecrease;
 
         newTCR = LiquityMath._computeCR(totalColl, totalDebt, _price);
     }

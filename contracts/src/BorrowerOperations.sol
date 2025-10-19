@@ -17,12 +17,6 @@ import "./Types/LatestTroveData.sol";
 import "./Types/LatestBatchData.sol";
 import "./BatchManagerOperations.sol";
 
-/**
- * @dev System parameters pattern:
- * Most system parameters are copied from SystemParams to immutable variables at construction for gas optimization.
- * However, to reduce contract size, the following parameter is read directly from SystemParams when needed:
- * - SCR: Only used in shutdown() function
- */
 contract BorrowerOperations is
     LiquityBase,
     AddRemoveManagers,
