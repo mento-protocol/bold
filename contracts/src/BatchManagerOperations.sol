@@ -120,7 +120,6 @@ contract BatchManagerOperations is IBatchManagerOperations {
             msg.sender
         );
         _requireBatchInterestRateChangePeriodPassed(
-            msg.sender,
             uint256(batch.lastInterestRateAdjTime),
             _minInterestRateChangePeriod
         );
@@ -530,7 +529,6 @@ contract BatchManagerOperations is IBatchManagerOperations {
     }
 
     function _requireBatchInterestRateChangePeriodPassed(
-        address _interestBatchManagerAddress,
         uint256 _lastInterestRateAdjTime,
         uint256 _minInterestRateChangePeriod
     ) internal view {

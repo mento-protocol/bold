@@ -1262,7 +1262,7 @@ contract BorrowerOperations is
     function _calcUpfrontFee(
         uint256 _debt,
         uint256 _avgInterestRate
-    ) internal view returns (uint256) {
+    ) internal pure returns (uint256) {
         return _calcInterest(_debt * _avgInterestRate, UPFRONT_INTEREST_PERIOD);
     }
 
@@ -1753,7 +1753,7 @@ contract BorrowerOperations is
         }
     }
 
-    function _requireDelegateCallSucceeded(bool success, bytes memory data) internal view {
+    function _requireDelegateCallSucceeded(bool success, bytes memory data) internal pure {
         if (!success) {
             assembly {
                 revert(add(0x20, data), mload(data))
