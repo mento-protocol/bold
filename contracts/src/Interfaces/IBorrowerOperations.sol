@@ -170,6 +170,4 @@ interface IBorrowerOperations is ILiquityBase, IAddRemoveManagers {
         uint256 _addLowerHint,
         uint256 _maxUpfrontFee
     ) external;
-
-    function removeTroveFromBatch(uint256 _troveId) external;
 }
