@@ -118,20 +118,17 @@ contract CollateralRegistry is ICollateralRegistry {
         _requireValidTroveOwnerFee(_troveOwnerFee);
         require(totalCollaterals == 1, "CollateralRegistry: Only one collateral supported for rebalancing");
 
-        uint256 redeemedAmount = 0;
-        for (uint256 index = 0; index < totalCollaterals; index++) {
-            ITroveManager troveManager = getTroveManager(index);
-            (uint256 unbackedPortion, uint256 price, bool redeemable) =
-                troveManager.getUnbackedPortionPriceAndRedeemability();
-            require(redeemable, "CollateralRegistry: Collateral is not redeemable");
-            redeemedAmount += troveManager.redeemCollateral(
-                msg.sender,
-                _boldAmount,
-                price,
-                _troveOwnerFee,
-                _maxIterationsPerCollateral
-            );
-        }
+        ITroveManager troveManager = getTroveManager(0);
+        (, uint256 price, bool redeemable) =
+            troveManager.getUnbackedPortionPriceAndRedeemability();
+        require(redeemable, "CollateralRegistry: Collateral is not redeemable");
+        uint256 redeemedAmount = troveManager.redeemCollateral(
+            msg.sender,
+            _boldAmount,
+            price,
+            _troveOwnerFee,
+            _maxIterationsPerCollateral
+        );
         require(redeemedAmount == _boldAmount, "CollateralRegistry: Redeemed amount does not match requested amount");
         boldToken.burn(msg.sender, redeemedAmount);
     }
@@ -365,7 +362,7 @@ contract CollateralRegistry is ICollateralRegistry {
         require(msg.sender == address(liquidityStrategy), "CollateralRegistry: Caller is not LiquidityStrategy");
     }
 
-    function _requireValidTroveOwnerFee(uint256 _troveOwnerFee) internal view {
-        require(_troveOwnerFee >= 0 && _troveOwnerFee <= DECIMAL_PRECISION, "Trove owner fee must be between 0% and 100%");
+    function _requireValidTroveOwnerFee(uint256 _troveOwnerFee) internal pure {
+        require(_troveOwnerFee <= DECIMAL_PRECISION, "CollateralRegistry: Trove owner fee must be between 0% and 100%");
     }
 }
