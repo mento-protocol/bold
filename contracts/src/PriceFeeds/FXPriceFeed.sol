@@ -50,6 +50,11 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
     /// @param _newRateFeedID The new rate feed ID
     event RateFeedIDUpdated(address indexed _oldRateFeedID, address indexed _newRateFeedID);
 
+    /// @notice Emitted when the invert rate feed flag is updated
+    /// @param _oldInvertRateFeed The previous invert rate feed flag
+    /// @param _newInvertRateFeed The new invert rate feed flag
+    event InvertRateFeedUpdated(bool _oldInvertRateFeed, bool _newInvertRateFeed);
+
     /// @notice Emitted when the watchdog address is updated
     /// @param _oldWatchdogAddress The previous watchdog address
     /// @param _newWatchdogAddress The new watchdog address
@@ -116,8 +121,10 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
      * @param _invertRateFeed Whether the rate from the OracleAdapter should be inverted
      */
     function setInvertRateFeed(bool _invertRateFeed) external onlyOwner {
+        bool oldInvertRateFeed = invertRateFeed;
         invertRateFeed = _invertRateFeed;
-        emit InvertRateFeedUpdated(invertRateFeed, _invertRateFeed);
+
+        emit InvertRateFeedUpdated(oldInvertRateFeed, _invertRateFeed);
     }
 
     /**
@@ -136,7 +143,7 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
     /**
      * @notice Fetches the price of the FX rate, if valid
      * @dev If the contract is shutdown due to oracle failure, the last valid price is returned
-     * @return The price of the FX rate
+     * @return price The price of the FX rate
      */
     function fetchPrice() public returns (uint256 price) {
         if (isShutdown) {
