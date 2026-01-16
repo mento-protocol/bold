@@ -35,6 +35,9 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
     /// @notice Whether the contract has been shutdown due to an oracle failure
     bool public isShutdown;
 
+    // @notice Whether the rate from the OracleAdapter should be inverted
+    bool public invertRateFeed;
+
     /// @notice Thrown when the attempting to shutdown the contract when it is already shutdown
     error IsShutDown();
     /// @notice Thrown when a non-watchdog address attempts to shutdown the contract
@@ -69,6 +72,7 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
      * @notice Initializes the FXPriceFeed contract
      * @param _oracleAdapterAddress The address of the OracleAdapter contract
      * @param _rateFeedID The address of the rate feed ID
+     * @param _invertRateFeed Whether the rate from the OracleAdapter should be inverted
      * @param _borrowerOperationsAddress The address of the BorrowerOperations contract
      * @param _watchdogAddress The address of the watchdog contract
      * @param _initialOwner The address of the initial owner
@@ -76,6 +80,7 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
     function initialize(
         address _oracleAdapterAddress,
         address _rateFeedID,
+        bool _invertRateFeed,
         address _borrowerOperationsAddress,
         address _watchdogAddress,
         address _initialOwner
@@ -88,6 +93,7 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
 
         oracleAdapter = IOracleAdapter(_oracleAdapterAddress);
         rateFeedID = _rateFeedID;
+        invertRateFeed = _invertRateFeed;
         borrowerOperations = IBorrowerOperations(_borrowerOperationsAddress);
         watchdogAddress = _watchdogAddress;
 
@@ -103,6 +109,15 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
         rateFeedID = _newRateFeedID;
 
         emit RateFeedIDUpdated(oldRateFeedID, _newRateFeedID);
+    }
+
+    /**
+     * @notice Sets the invert rate feed flag
+     * @param _invertRateFeed Whether the rate from the OracleAdapter should be inverted
+     */
+    function setInvertRateFeed(bool _invertRateFeed) external onlyOwner {
+        invertRateFeed = _invertRateFeed;
+        emit InvertRateFeedUpdated(invertRateFeed, _invertRateFeed);
     }
 
     /**
@@ -123,13 +138,20 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
      * @dev If the contract is shutdown due to oracle failure, the last valid price is returned
      * @return The price of the FX rate
      */
-    function fetchPrice() public returns (uint256) {
+    function fetchPrice() public returns (uint256 price) {
         if (isShutdown) {
             return lastValidPrice;
         }
 
-        // Denominator is always 1e18, so we only use the numerator as the price
-        (uint256 price,) = oracleAdapter.getFXRateIfValid(rateFeedID);
+        (uint256 numerator, uint256 denominator) = oracleAdapter.getFXRateIfValid(rateFeedID);
+
+        if (invertRateFeed) {
+            // Multiply by 1e18 to get the price in 18 decimals
+            price = (denominator * 1e18) / numerator;
+        } else {
+            // Denominator is always 1e18, so we only use the numerator as the price
+            price = numerator;
+        }
 
         lastValidPrice = price;
 
