@@ -36,7 +36,7 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
     bool public isShutdown;
 
     /// @notice Thrown when the attempting to shutdown the contract when it is already shutdown
-    error IsShutDown();
+    error AlreadyShutdown();
     /// @notice Thrown when a non-watchdog address attempts to shutdown the contract
     error CallerNotWatchdog();
     /// @notice Thrown when a zero address is provided as a parameter
@@ -145,7 +145,7 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
      *      - The shutdown state is permanent and cannot be reversed
      */
     function shutdown() external {
-        if (isShutdown) revert IsShutDown();
+        if (isShutdown) revert AlreadyShutdown();
         if (msg.sender != watchdogAddress) revert CallerNotWatchdog();
 
         isShutdown = true;

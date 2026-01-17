@@ -296,7 +296,7 @@ contract FXPriceFeedTest is Test {
     function test_shutdown_whenAlreadyShutdown_shouldRevert() initialized public {
         vm.prank(watchdog);
         fxPriceFeed.shutdown();
-        vm.expectRevert(FXPriceFeed.IsShutDown.selector);
+        vm.expectRevert(FXPriceFeed.AlreadyShutdown.selector);
         fxPriceFeed.shutdown();
         vm.stopPrank();
     }
