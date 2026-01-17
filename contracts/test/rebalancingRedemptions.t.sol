@@ -85,8 +85,6 @@ contract RebalancingRedemptions is DevTestSetup {
 
         priceFeed.setPrice((price * 5e17)/1e18); // 50% below the initial price
 
-
-
         vm.startPrank(collateralRegistry.liquidityStrategy());
         vm.expectRevert("CollateralRegistry: Collateral is not redeemable");
         collateralRegistry.redeemCollateralRebalancing(100, 10, 50 * 1e12);
