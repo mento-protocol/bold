@@ -21,6 +21,7 @@ contract MockBorrowerOperations {
 contract MockOracleAdapter {
     uint256 numerator;
     uint256 denominator;
+    bool public sequencerUp = true;
 
     function setFXRate(uint256 _numerator, uint256 _denominator) external {
         numerator = _numerator;
@@ -30,6 +31,14 @@ contract MockOracleAdapter {
     function getFXRateIfValid(address) external view returns (uint256, uint256) {
         return (numerator, denominator);
     }
+
+    function setIsL2SequencerUp(bool _isUp) external {
+        sequencerUp = _isUp;
+    }
+
+    function isL2SequencerUp(uint256) external view returns (bool) {
+        return sequencerUp;
+    }
 }
 
 
@@ -37,6 +46,8 @@ contract FXPriceFeedTest is Test {
 
     event WatchdogAddressUpdated(address indexed _oldWatchdogAddress, address indexed _newWatchdogAddress);
     event FXPriceFeedShutdown();
+    event OracleAdapterUpdated(address indexed _oldOracleAdapterAddress, address indexed _newOracleAdapterAddress);
+    event L2SequencerGracePeriodUpdated(uint256 indexed _oldL2SequencerGracePeriod, uint256 indexed _newL2SequencerGracePeriod);
 
     FXPriceFeed public fxPriceFeed;
     MockOracleAdapter public mockOracleAdapter;
@@ -68,6 +79,7 @@ contract FXPriceFeedTest is Test {
     function setUp() public {
         mockOracleAdapter = new MockOracleAdapter();
         mockOracleAdapter.setFXRate(mockRateNumerator, mockRateDenominator);
+        mockOracleAdapter.setIsL2SequencerUp(true);
 
         mockBorrowerOperations = new MockBorrowerOperations();
 
@@ -312,5 +324,76 @@ contract FXPriceFeedTest is Test {
         vm.expectRevert(FXPriceFeed.AlreadyShutdown.selector);
         fxPriceFeed.shutdown();
         vm.stopPrank();
+    }
+
+    function test_setOracleAdapter_whenCalledByNonOwner_shouldRevert() initialized public {
+        address notOwner = makeAddr("notOwner");
+
+        vm.prank(notOwner);
+        vm.expectRevert("Ownable: caller is not the owner");
+        fxPriceFeed.setOracleAdapter(makeAddr("newOracleAdapter"));
+        vm.stopPrank();
+    }
+
+    function test_setOracleAdapter_whenNewAddressIsZero_shouldRevert() initialized public {
+        vm.prank(owner);
+        vm.expectRevert(FXPriceFeed.ZeroAddress.selector);
+        fxPriceFeed.setOracleAdapter(address(0));
+        vm.stopPrank();
+    }
+
+    function test_setOracleAdapter_whenCalledByOwner_shouldSucceed() initialized public {
+        address newOracleAdapter = makeAddr("newOracleAdapter");
+
+        vm.prank(owner);
+        vm.expectEmit();
+        emit OracleAdapterUpdated(address(mockOracleAdapter), newOracleAdapter);
+        fxPriceFeed.setOracleAdapter(newOracleAdapter);
+        vm.stopPrank();
+
+        assertEq(address(fxPriceFeed.oracleAdapter()), newOracleAdapter);
+    }
+
+    function test_setL2SequencerGracePeriod_whenCalledByNonOwner_shouldRevert() initialized public {
+        address notOwner = makeAddr("notOwner");
+
+        vm.prank(notOwner);
+        vm.expectRevert("Ownable: caller is not the owner");
+        fxPriceFeed.setL2SequencerGracePeriod(12 hours);
+        vm.stopPrank();
+    }
+
+    function test_setL2SequencerGracePeriod_whenNewPeriodIsZero_shouldRevert() initialized public {
+        vm.prank(owner);
+        vm.expectRevert(FXPriceFeed.InvalidL2SequencerGracePeriod.selector);
+        fxPriceFeed.setL2SequencerGracePeriod(0);
+        vm.stopPrank();
+    }
+
+    function test_setL2SequencerGracePeriod_whenCalledByOwner_shouldSucceed() initialized public {
+        uint256 oldGracePeriod = fxPriceFeed.l2SequencerGracePeriod();
+        uint256 newGracePeriod = 12 hours;
+
+        vm.prank(owner);
+        vm.expectEmit();
+        emit L2SequencerGracePeriodUpdated(oldGracePeriod, newGracePeriod);
+        fxPriceFeed.setL2SequencerGracePeriod(newGracePeriod);
+        vm.stopPrank();
+
+        assertEq(fxPriceFeed.l2SequencerGracePeriod(), newGracePeriod);
+    }
+
+    function test_isL2SequencerUp_whenSequencerIsUp_shouldReturnTrue() initialized public {
+        mockOracleAdapter.setIsL2SequencerUp(true);
+
+        bool result = fxPriceFeed.isL2SequencerUp();
+        assertTrue(result);
+    }
+
+    function test_isL2SequencerUp_whenSequencerIsDown_shouldReturnFalse() initialized public {
+        mockOracleAdapter.setIsL2SequencerUp(false);
+
+        bool result = fxPriceFeed.isL2SequencerUp();
+        assertFalse(result);
     }
 }
