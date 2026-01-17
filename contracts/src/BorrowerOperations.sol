@@ -129,6 +129,7 @@ contract BorrowerOperations is LiquityBase, AddRemoveManagers, IBorrowerOperatio
     error MinInterestRateChangePeriodTooLow();
     error NewOracleFailureDetected();
     error BatchSharesRatioTooLow();
+    error L2SequencerDown();
 
     event TroveManagerAddressChanged(address _newTroveManagerAddress);
     event GasPoolAddressChanged(address _gasPoolAddress);
@@ -1379,6 +1380,12 @@ contract BorrowerOperations is LiquityBase, AddRemoveManagers, IBorrowerOperatio
     function _requireCallerIsPriceFeed() internal view {
         if (msg.sender != address(priceFeed)) {
             revert CallerNotPriceFeed();
+        }
+    }
+
+    function _requireL2SequencerIsUp() internal view {
+        if (!priceFeed.isL2SequencerUp()) {
+            revert L2SequencerDown();
         }
     }
 

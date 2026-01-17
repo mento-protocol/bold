@@ -41,7 +41,9 @@ contract FXPriceFeedTest is Test {
     FXPriceFeed public fxPriceFeed;
     MockOracleAdapter public mockOracleAdapter;
     MockBorrowerOperations public mockBorrowerOperations;
+    MockFXPriceFeed public mockFXPriceFeed;
 
+    uint256 public l2SequencerGracePeriod = 6 hours;
     address public rateFeedID = makeAddr("rateFeedID");
     address public watchdog = makeAddr("watchdog");
     address public owner = makeAddr("owner");
@@ -54,6 +56,7 @@ contract FXPriceFeedTest is Test {
         fxPriceFeed.initialize(
             address(mockOracleAdapter),
             rateFeedID,
+            l2SequencerGracePeriod,
             address(mockBorrowerOperations),
             watchdog,
             owner
@@ -78,6 +81,7 @@ contract FXPriceFeedTest is Test {
         newFeed.initialize(
             address(mockOracleAdapter),
             rateFeedID,
+            l2SequencerGracePeriod,
             address(mockBorrowerOperations),
             watchdog,
             owner
@@ -91,6 +95,7 @@ contract FXPriceFeedTest is Test {
         newFeed.initialize(
             address(0),
             rateFeedID,
+            l2SequencerGracePeriod,
             address(mockBorrowerOperations),
             watchdog,
             owner
@@ -104,6 +109,7 @@ contract FXPriceFeedTest is Test {
         newFeed.initialize(
             address(mockOracleAdapter),
             address(0),
+            l2SequencerGracePeriod,
             address(mockBorrowerOperations),
             watchdog,
             owner
@@ -117,6 +123,7 @@ contract FXPriceFeedTest is Test {
         newFeed.initialize(
             address(mockOracleAdapter),
             rateFeedID,
+            l2SequencerGracePeriod,
             address(0),
             watchdog,
             owner
@@ -130,6 +137,7 @@ contract FXPriceFeedTest is Test {
         newFeed.initialize(
             address(mockOracleAdapter),
             rateFeedID,
+            l2SequencerGracePeriod,
             address(mockBorrowerOperations),
             address(0),
             owner
@@ -143,6 +151,7 @@ contract FXPriceFeedTest is Test {
         newFeed.initialize(
             address(mockOracleAdapter),
             rateFeedID,
+            l2SequencerGracePeriod,
             address(mockBorrowerOperations),
             watchdog,
             address(0)
@@ -157,6 +166,7 @@ contract FXPriceFeedTest is Test {
         newFeed.initialize(
             address(mockOracleAdapter),
             rateFeedID,
+            l2SequencerGracePeriod,
             address(mockBorrowerOperations),
             watchdog,
             owner
@@ -164,6 +174,7 @@ contract FXPriceFeedTest is Test {
 
         assertEq(address(newFeed.oracleAdapter()), address(mockOracleAdapter));
         assertEq(newFeed.rateFeedID(), rateFeedID);
+        assertEq(newFeed.l2SequencerGracePeriod(), l2SequencerGracePeriod);
         assertEq(address(newFeed.borrowerOperations()), address(mockBorrowerOperations));
         assertEq(newFeed.watchdogAddress(), watchdog);
         assertEq(newFeed.owner(), owner);
@@ -176,6 +187,7 @@ contract FXPriceFeedTest is Test {
         newFeed.initialize(
             address(mockOracleAdapter),
             rateFeedID,
+            l2SequencerGracePeriod,
             address(mockBorrowerOperations),
             watchdog,
             owner
@@ -185,6 +197,7 @@ contract FXPriceFeedTest is Test {
         newFeed.initialize(
             address(mockOracleAdapter),
             rateFeedID,
+            l2SequencerGracePeriod,
             address(mockBorrowerOperations),
             watchdog,
             owner
@@ -274,7 +287,7 @@ contract FXPriceFeedTest is Test {
         address notWatchdog = makeAddr("notWatchdog");
 
         vm.prank(notWatchdog);
-        vm.expectRevert(FXPriceFeed.CallerNotWatchdog.selector);
+        vm.expectRevert(FXPriceFeed.OnlyWatchdog.selector);
         fxPriceFeed.shutdown();
         vm.stopPrank();
     }

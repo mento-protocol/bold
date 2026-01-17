@@ -23,6 +23,9 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
     /// @notice The identifier address for the specific rate feed to query
     address public rateFeedID;
 
+    /// @notice The grace period for the L2 sequencer to recover from failure
+    uint256 public l2SequencerGracePeriod;
+
     /// @notice The watchdog contract address authorized to trigger emergency shutdown
     address public watchdogAddress;
 
@@ -35,17 +38,29 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
     /// @notice Whether the contract has been shutdown due to an oracle failure
     bool public isShutdown;
 
-    /// @notice Thrown when the attempting to shutdown the contract when it is already shutdown
+    /// @notice Thrown when the attempting to shutdown an already shutdown contract
     error AlreadyShutdown();
     /// @notice Thrown when a non-watchdog address attempts to shutdown the contract
-    error CallerNotWatchdog();
+    error OnlyWatchdog();
     /// @notice Thrown when a zero address is provided as a parameter
     error ZeroAddress();
+    /// @notice Thrown when an invalid grace period is provided
+    error InvalidL2SequencerGracePeriod();
+
+    /// @notice Emitted when the OracleAdapter contract is updated
+    /// @param _oldOracleAdapterAddress The previous OracleAdapter contract
+    /// @param _newOracleAdapterAddress The new OracleAdapter contract
+    event OracleAdapterUpdated(address indexed _oldOracleAdapterAddress, address indexed _newOracleAdapterAddress);
 
     /// @notice Emitted when the rate feed ID is updated
     /// @param _oldRateFeedID The previous rate feed ID
     /// @param _newRateFeedID The new rate feed ID
     event RateFeedIDUpdated(address indexed _oldRateFeedID, address indexed _newRateFeedID);
+
+    /// @notice Emitted when the L2 sequencer grace period is updated
+    /// @param _oldL2SequencerGracePeriod The previous L2 sequencer grace period
+    /// @param _newL2SequencerGracePeriod The new L2 sequencer grace period
+    event L2SequencerGracePeriodUpdated(uint256 indexed _oldL2SequencerGracePeriod, uint256 indexed _newL2SequencerGracePeriod);
 
     /// @notice Emitted when the watchdog address is updated
     /// @param _oldWatchdogAddress The previous watchdog address
@@ -69,6 +84,7 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
      * @notice Initializes the FXPriceFeed contract
      * @param _oracleAdapterAddress The address of the OracleAdapter contract
      * @param _rateFeedID The address of the rate feed ID
+     * @param _l2SequencerGracePeriod The grace period for the L2 sequencer to recover from failure
      * @param _borrowerOperationsAddress The address of the BorrowerOperations contract
      * @param _watchdogAddress The address of the watchdog contract
      * @param _initialOwner The address of the initial owner
@@ -76,6 +92,7 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
     function initialize(
         address _oracleAdapterAddress,
         address _rateFeedID,
+        uint256 _l2SequencerGracePeriod,
         address _borrowerOperationsAddress,
         address _watchdogAddress,
         address _initialOwner
@@ -88,6 +105,7 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
 
         oracleAdapter = IOracleAdapter(_oracleAdapterAddress);
         rateFeedID = _rateFeedID;
+        l2SequencerGracePeriod = _l2SequencerGracePeriod;
         borrowerOperations = IBorrowerOperations(_borrowerOperationsAddress);
         watchdogAddress = _watchdogAddress;
 
@@ -96,6 +114,24 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
         _transferOwnership(_initialOwner);
     }
 
+
+    /**
+     * @notice Sets the OracleAdapter contract
+     * @param _newOracleAdapterAddress The address of the new OracleAdapter contract
+     */
+    function setOracleAdapter(address _newOracleAdapterAddress) external onlyOwner {
+        if (_newOracleAdapterAddress == address(0)) revert ZeroAddress();
+
+        address oldOracleAdapter = address(oracleAdapter);
+        oracleAdapter = IOracleAdapter(_newOracleAdapterAddress);
+
+        emit OracleAdapterUpdated(oldOracleAdapter, _newOracleAdapterAddress);
+    }
+
+    /**
+     * @notice Sets the rate feed ID to be queried
+     * @param _newRateFeedID The address of the new rate feed ID
+     */
     function setRateFeedID(address _newRateFeedID) external onlyOwner {
         if (_newRateFeedID == address(0)) revert ZeroAddress();
 
@@ -103,6 +139,19 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
         rateFeedID = _newRateFeedID;
 
         emit RateFeedIDUpdated(oldRateFeedID, _newRateFeedID);
+    }
+
+    /**
+     * @notice Sets the L2 sequencer grace period
+     * @param _newL2SequencerGracePeriod The new L2 sequencer grace period (in seconds)
+     */
+    function setL2SequencerGracePeriod(uint256 _newL2SequencerGracePeriod) external onlyOwner {
+        if (_newL2SequencerGracePeriod == 0) revert InvalidL2SequencerGracePeriod();
+
+        uint256 oldL2SequencerGracePeriod = l2SequencerGracePeriod;
+        l2SequencerGracePeriod = _newL2SequencerGracePeriod;
+
+        emit L2SequencerGracePeriodUpdated(oldL2SequencerGracePeriod, _newL2SequencerGracePeriod);
     }
 
     /**
@@ -116,6 +165,14 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
         watchdogAddress = _newWatchdogAddress;
 
         emit WatchdogAddressUpdated(oldWatchdogAddress, _newWatchdogAddress);
+    }
+
+    /**
+     * @notice Checks if the L2 sequencer is up and the grace period has passed
+     * @return True if the L2 sequencer is up and the grace period has passed, false otherwise
+     */
+    function isL2SequencerUp() public view returns (bool) {
+        return oracleAdapter.isL2SequencerUp(l2SequencerGracePeriod);
     }
 
     /**
@@ -146,7 +203,7 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
      */
     function shutdown() external {
         if (isShutdown) revert AlreadyShutdown();
-        if (msg.sender != watchdogAddress) revert CallerNotWatchdog();
+        if (msg.sender != watchdogAddress) revert OnlyWatchdog();
 
         isShutdown = true;
         borrowerOperations.shutdownFromOracleFailure();
