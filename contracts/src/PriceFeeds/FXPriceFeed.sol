@@ -23,6 +23,9 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
     /// @notice The identifier address for the specific rate feed to query
     address public rateFeedID;
 
+    // @notice Whether the rate from the OracleAdapter should be inverted
+    bool public invertRateFeed;
+
     /// @notice The grace period for the L2 sequencer to recover from failure
     uint256 public l2SequencerGracePeriod;
 
@@ -40,6 +43,7 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
 
     /// @notice Thrown when the attempting to shutdown an already shutdown contract
     error AlreadyShutdown();
+
     /// @notice Thrown when a non-watchdog address attempts to shutdown the contract
     error OnlyWatchdog();
     /// @notice Thrown when a zero address is provided as a parameter
@@ -56,6 +60,11 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
     /// @param _oldRateFeedID The previous rate feed ID
     /// @param _newRateFeedID The new rate feed ID
     event RateFeedIDUpdated(address indexed _oldRateFeedID, address indexed _newRateFeedID);
+
+    /// @notice Emitted when the invert rate feed flag is updated
+    /// @param _oldInvertRateFeed The previous invert rate feed flag
+    /// @param _newInvertRateFeed The new invert rate feed flag
+    event InvertRateFeedUpdated(bool _oldInvertRateFeed, bool _newInvertRateFeed);
 
     /// @notice Emitted when the L2 sequencer grace period is updated
     /// @param _oldL2SequencerGracePeriod The previous L2 sequencer grace period
@@ -84,6 +93,7 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
      * @notice Initializes the FXPriceFeed contract
      * @param _oracleAdapterAddress The address of the OracleAdapter contract
      * @param _rateFeedID The address of the rate feed ID
+     * @param _invertRateFeed Whether the rate from the OracleAdapter should be inverted
      * @param _l2SequencerGracePeriod The grace period for the L2 sequencer to recover from failure
      * @param _borrowerOperationsAddress The address of the BorrowerOperations contract
      * @param _watchdogAddress The address of the watchdog contract
@@ -92,6 +102,7 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
     function initialize(
         address _oracleAdapterAddress,
         address _rateFeedID,
+        bool _invertRateFeed,
         uint256 _l2SequencerGracePeriod,
         address _borrowerOperationsAddress,
         address _watchdogAddress,
@@ -105,6 +116,7 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
 
         oracleAdapter = IOracleAdapter(_oracleAdapterAddress);
         rateFeedID = _rateFeedID;
+        invertRateFeed = _invertRateFeed;
         l2SequencerGracePeriod = _l2SequencerGracePeriod;
         borrowerOperations = IBorrowerOperations(_borrowerOperationsAddress);
         watchdogAddress = _watchdogAddress;
@@ -139,6 +151,17 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
         rateFeedID = _newRateFeedID;
 
         emit RateFeedIDUpdated(oldRateFeedID, _newRateFeedID);
+    }
+
+    /**
+     * @notice Sets the invert rate feed flag
+     * @param _invertRateFeed Whether the rate from the OracleAdapter should be inverted
+     */
+    function setInvertRateFeed(bool _invertRateFeed) external onlyOwner {
+        bool oldInvertRateFeed = invertRateFeed;
+        invertRateFeed = _invertRateFeed;
+
+        emit InvertRateFeedUpdated(oldInvertRateFeed, _invertRateFeed);
     }
 
     /**
@@ -178,15 +201,23 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
     /**
      * @notice Fetches the price of the FX rate, if valid
      * @dev If the contract is shutdown due to oracle failure, the last valid price is returned
-     * @return The price of the FX rate
+     * @return price The price of the FX rate
      */
-    function fetchPrice() public returns (uint256) {
+    function fetchPrice() public returns (uint256 price) {
         if (isShutdown) {
             return lastValidPrice;
         }
 
-        // Denominator is always 1e18, so we only use the numerator as the price
-        (uint256 price,) = oracleAdapter.getFXRateIfValid(rateFeedID);
+        (uint256 numerator, uint256 denominator) = oracleAdapter.getFXRateIfValid(rateFeedID);
+
+        if (invertRateFeed) {
+            // Multiply by 1e18 to get the price in 18 decimals
+            price = (denominator * 1e18) / numerator;
+        } else {
+            // Denominator is always 1e18, so we only use the numerator as the price
+            assert(denominator == 1e18);
+            price = numerator;
+        }
 
         lastValidPrice = price;
 
