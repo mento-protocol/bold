@@ -214,6 +214,7 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
             // Multiply by 1e18 to get the price in 18 decimals
             price = (denominator * 1e18) / numerator;
         } else {
+            // Denominator is always 1e18, so we only use the numerator as the price
             price = numerator;
         }
 
