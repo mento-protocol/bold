@@ -9,7 +9,8 @@ import "./Interfaces/IAddressesRegistry.sol";
 import "./Interfaces/IStabilityPoolEvents.sol";
 import "./Interfaces/ITroveManager.sol";
 import "./Interfaces/IBoldToken.sol";
-import "./Dependencies/LiquityBase.sol";
+import "./Interfaces/ISystemParams.sol";
+import "./Dependencies/LiquityBaseInit.sol";
 
 /*
  * The Stability Pool holds Bold tokens deposited by Stability Pool depositors.
@@ -60,7 +61,7 @@ import "./Dependencies/LiquityBase.sol";
  *
  * A series of liquidations that nearly empty the Pool (and thus each multiply P by a very small number in range ]0,1[ ) may push P
  * to its 36 digit decimal limit, and round it to 0, when in fact the Pool hasn't been emptied: this would break deposit tracking.
- * 
+ *
  * P is stored at 36-digit precision as a uint. That is, a value of "1" is represented by a value of 1e36 in the code.
  *
  * So, to track P accurately, we use a scale factor: if a liquidation would cause P to decrease below 1e27,
@@ -115,14 +116,14 @@ import "./Dependencies/LiquityBase.sol";
  *
  *
  */
-contract StabilityPool is LiquityBase, IStabilityPool, IStabilityPoolEvents {
+contract StabilityPool is Initializable, LiquityBaseInit, IStabilityPool, IStabilityPoolEvents {
     using SafeERC20 for IERC20;
 
     string public constant NAME = "StabilityPool";
 
-    IERC20 public immutable collToken;
-    ITroveManager public immutable troveManager;
-    IBoldToken public immutable boldToken;
+    IERC20 public collToken;
+    ITroveManager public troveManager;
+    IBoldToken public boldToken;
 
     uint256 internal collBalance; // deposited coll tracker
 
@@ -175,6 +176,10 @@ contract StabilityPool is LiquityBase, IStabilityPool, IStabilityPoolEvents {
     // Each time the scale of P shifts by SCALE_FACTOR, the scale is incremented by 1
     uint256 public currentScale;
 
+    address public liquidityStrategy;
+
+    ISystemParams public immutable systemParams;
+
     /* Coll Gain sum 'S': During its lifetime, each deposit d_t earns an Coll gain of ( d_t * [S - S_t] )/P_t, where S_t
     * is the depositor's snapshot of S taken at the time t when the deposit was made.
     *
@@ -188,11 +193,29 @@ contract StabilityPool is LiquityBase, IStabilityPool, IStabilityPoolEvents {
 
     event TroveManagerAddressChanged(address _newTroveManagerAddress);
     event BoldTokenAddressChanged(address _newBoldTokenAddress);
+    event RebalanceExecuted(uint256 amountCollIn, uint256 amountStableOut);
 
-    constructor(IAddressesRegistry _addressesRegistry) LiquityBase(_addressesRegistry) {
+    /**
+     * @dev Should be called with disable=true in deployments when it's accessed through a Proxy.
+     * Call this with disable=false during testing, when used without a proxy.
+     */
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor(bool disable, ISystemParams _systemParams) {
+        if (disable) {
+            _disableInitializers();
+        }
+
+        systemParams = _systemParams;
+    }
+
+    function initialize(IAddressesRegistry _addressesRegistry) external initializer {
+        __LiquityBase_init(_addressesRegistry);
+
         collToken = _addressesRegistry.collToken();
         troveManager = _addressesRegistry.troveManager();
         boldToken = _addressesRegistry.boldToken();
+        liquidityStrategy = _addressesRegistry.liquidityStrategy();
+        P = P_PRECISION;
 
         emit TroveManagerAddressChanged(address(troveManager));
         emit BoldTokenAddressChanged(address(boldToken));
@@ -315,7 +338,10 @@ contract StabilityPool is LiquityBase, IStabilityPool, IStabilityPoolEvents {
         _sendBoldtoDepositor(msg.sender, boldToWithdraw + yieldGainToSend);
         _sendCollGainToDepositor(collToSend);
 
-        require(newTotalBoldDeposits >= MIN_BOLD_IN_SP, "Withdrawal must leave totalBoldDeposits >= MIN_BOLD_IN_SP");
+        require(
+            newTotalBoldDeposits >= systemParams.MIN_BOLD_IN_SP(),
+            "Withdrawal must leave totalBoldDeposits >= MIN_BOLD_IN_SP"
+        );
     }
 
     function _getNewStashedCollAndCollToSend(address _depositor, uint256 _currentCollGain, bool _doClaim)
@@ -361,7 +387,7 @@ contract StabilityPool is LiquityBase, IStabilityPool, IStabilityPoolEvents {
 
         // When total deposits is very small, B is not updated. In this case, the BOLD issued is held
         // until the total deposits reach 1 BOLD (remains in the balance of the SP).
-        if (totalBoldDeposits < MIN_BOLD_IN_SP) {
+        if (totalBoldDeposits < systemParams.MIN_BOLD_IN_SP()) {
             yieldGainsPending = accumulatedYieldGains;
             return;
         }
@@ -371,6 +397,32 @@ contract StabilityPool is LiquityBase, IStabilityPool, IStabilityPoolEvents {
 
         scaleToB[currentScale] += P * accumulatedYieldGains / totalBoldDeposits;
         emit B_Updated(scaleToB[currentScale], currentScale);
+    }
+
+    // --- Liquidity strategy functions ---
+
+    /*
+    * Stable token liquidity in the stability pool can be used to rebalance FPMM pools.
+    * Collateral will be swapped for stable tokens in the SP.
+    * Removed stable tokens will be factored out from LPs' positions.
+    * Added collateral will be added to LPs collateral gain which can be later claimed by the depositor.
+    */
+    function swapCollateralForStable(uint256 amountCollIn, uint256 amountStableOut) external {
+        _requireCallerIsLiquidityStrategy();
+        _requireNoShutdown();
+        
+
+        activePool.mintAggInterest();
+
+        _updateTrackingVariables(amountStableOut, amountCollIn);
+
+        _swapCollateralForStable(amountCollIn, amountStableOut);
+
+        require(
+            totalBoldDeposits >= systemParams.MIN_BOLD_AFTER_REBALANCE(),
+            "Total Bold deposits must be >= MIN_BOLD_AFTER_REBALANCE"
+        );
+        emit RebalanceExecuted(amountCollIn, amountStableOut);
     }
 
     // --- Liquidation functions ---
@@ -383,10 +435,16 @@ contract StabilityPool is LiquityBase, IStabilityPool, IStabilityPoolEvents {
     function offset(uint256 _debtToOffset, uint256 _collToAdd) external override {
         _requireCallerIsTroveManager();
 
-        scaleToS[currentScale] += P * _collToAdd / totalBoldDeposits;
+        _updateTrackingVariables(_debtToOffset, _collToAdd);
+
+        _moveOffsetCollAndDebt(_collToAdd, _debtToOffset);
+    }
+
+    function _updateTrackingVariables(uint256 _amountStableOut, uint256 _amountCollIn) internal {
+        scaleToS[currentScale] += P * _amountCollIn / totalBoldDeposits;
         emit S_Updated(scaleToS[currentScale], currentScale);
 
-        uint256 numerator = P * (totalBoldDeposits - _debtToOffset);
+        uint256 numerator = P * (totalBoldDeposits - _amountStableOut);
         uint256 newP = numerator / totalBoldDeposits;
 
         // For `P` to turn zero, `totalBoldDeposits` has to be greater than `P * (totalBoldDeposits - _debtToOffset)`.
@@ -412,8 +470,16 @@ contract StabilityPool is LiquityBase, IStabilityPool, IStabilityPoolEvents {
 
         emit P_Updated(newP);
         P = newP;
+    }
 
-        _moveOffsetCollAndDebt(_collToAdd, _debtToOffset);
+    function _swapCollateralForStable(uint256 _amountCollIn, uint256 _amountStableOut) internal {
+        _updateTotalBoldDeposits(0, _amountStableOut);
+        IERC20(address(boldToken)).safeTransfer(liquidityStrategy, _amountStableOut);
+
+        collBalance += _amountCollIn;
+        collToken.safeTransferFrom(msg.sender, address(this), _amountCollIn);
+
+        emit StabilityPoolCollBalanceUpdated(collBalance);
     }
 
     function _moveOffsetCollAndDebt(uint256 _collToAdd, uint256 _debtToOffset) internal {
@@ -485,7 +551,7 @@ contract StabilityPool is LiquityBase, IStabilityPool, IStabilityPoolEvents {
     }
 
     function getDepositorYieldGainWithPending(address _depositor) external view override returns (uint256) {
-        if (totalBoldDeposits < MIN_BOLD_IN_SP) return 0;
+        if (totalBoldDeposits < systemParams.MIN_BOLD_IN_SP()) return 0;
 
         uint256 initialDeposit = deposits[_depositor].initialValue;
         if (initialDeposit == 0) return 0;
@@ -597,7 +663,15 @@ contract StabilityPool is LiquityBase, IStabilityPool, IStabilityPoolEvents {
         require(initialDeposit == 0, "StabilityPool: User must have no deposit");
     }
 
+    function _requireCallerIsLiquidityStrategy() internal view {
+        require(msg.sender == liquidityStrategy, "StabilityPool: Caller is not LiquidityStrategy");
+    }
+
     function _requireNonZeroAmount(uint256 _amount) internal pure {
         require(_amount > 0, "StabilityPool: Amount must be non-zero");
+    }
+
+    function _requireNoShutdown() internal view {
+        require(troveManager.shutdownTime() == 0, "StabilityPool: System is shut down");
     }
 }

@@ -17,7 +17,7 @@ abstract contract SPInvariantsBase is Assertions, BaseInvariantTest {
         super.setUp();
 
         TestDeployer deployer = new TestDeployer();
-        (TestDeployer.LiquityContractsDev memory contracts,, IBoldToken boldToken, HintHelpers hintHelpers,,,) =
+        (TestDeployer.LiquityContractsDev memory contracts,, IBoldToken boldToken, HintHelpers hintHelpers,,) =
             deployer.deployAndConnectContracts();
         stabilityPool = contracts.stabilityPool;
 
@@ -29,7 +29,8 @@ abstract contract SPInvariantsBase is Assertions, BaseInvariantTest {
                 priceFeed: contracts.priceFeed,
                 stabilityPool: contracts.stabilityPool,
                 troveManager: contracts.troveManager,
-                collSurplusPool: contracts.pools.collSurplusPool
+                collSurplusPool: contracts.pools.collSurplusPool,
+                systemParams: contracts.systemParams
             }),
             hintHelpers
         );

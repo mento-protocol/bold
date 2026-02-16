@@ -8,9 +8,10 @@ import {IStabilityPool} from "src/Interfaces/IStabilityPool.sol";
 import {ITroveManager} from "src/Interfaces/ITroveManager.sol";
 import {ICollSurplusPool} from "src/Interfaces/ICollSurplusPool.sol";
 import {HintHelpers} from "src/HintHelpers.sol";
-import {IPriceFeedTestnet} from "./Interfaces/IPriceFeedTestnet.sol";
+import {IMockFXPriceFeed} from "./Interfaces/IMockFXPriceFeed.sol";
 import {ITroveManagerTester} from "./Interfaces/ITroveManagerTester.sol";
 import {LiquityMath} from "src/Dependencies/LiquityMath.sol";
+import {ISystemParams} from "src/Interfaces/ISystemParams.sol";
 import {mulDivCeil} from "../Utils/Math.sol";
 import {StringFormatting} from "../Utils/StringFormatting.sol";
 import {TroveId} from "../Utils/TroveId.sol";
@@ -19,11 +20,7 @@ import {BaseHandler} from "./BaseHandler.sol";
 import {
     DECIMAL_PRECISION,
     _1pct,
-    _100pct,
-    ETH_GAS_COMPENSATION,
-    COLL_GAS_COMPENSATION_DIVISOR,
-    MIN_ANNUAL_INTEREST_RATE,
-    MIN_BOLD_IN_SP
+    _100pct
 } from "src/Dependencies/Constants.sol";
 
 using {mulDivCeil} for uint256;
@@ -44,23 +41,31 @@ contract SPInvariantsTestHandler is BaseHandler, TroveId {
         IBoldToken boldToken;
         IBorrowerOperations borrowerOperations;
         IERC20 collateralToken;
-        IPriceFeedTestnet priceFeed;
+        IMockFXPriceFeed priceFeed;
         IStabilityPool stabilityPool;
         ITroveManagerTester troveManager;
         ICollSurplusPool collSurplusPool;
+        ISystemParams systemParams;
     }
 
     IBoldToken immutable boldToken;
     IBorrowerOperations immutable borrowerOperations;
     IERC20 collateralToken;
-    IPriceFeedTestnet immutable priceFeed;
+    IMockFXPriceFeed immutable priceFeed;
     IStabilityPool immutable stabilityPool;
     ITroveManagerTester immutable troveManager;
     ICollSurplusPool immutable collSurplusPool;
+    ISystemParams immutable systemParams;
     HintHelpers immutable hintHelpers;
 
     uint256 immutable initialPrice;
     mapping(address owner => uint256) troveIndexOf;
+
+    // System params
+    uint256 immutable ETH_GAS_COMPENSATION;
+    uint256 immutable MIN_ANNUAL_INTEREST_RATE;
+    uint256 immutable MIN_BOLD_IN_SP;
+    uint256 immutable COLL_GAS_COMPENSATION_DIVISOR;
 
     // Ghost variables
     uint256 myBold = 0;
@@ -78,9 +83,16 @@ contract SPInvariantsTestHandler is BaseHandler, TroveId {
         stabilityPool = contracts.stabilityPool;
         troveManager = contracts.troveManager;
         collSurplusPool = contracts.collSurplusPool;
+        systemParams = contracts.systemParams;
         hintHelpers = hintHelpers_;
 
         initialPrice = priceFeed.getPrice();
+
+        // Initialize system params
+        ETH_GAS_COMPENSATION = systemParams.ETH_GAS_COMPENSATION();
+        MIN_ANNUAL_INTEREST_RATE = systemParams.MIN_ANNUAL_INTEREST_RATE();
+        MIN_BOLD_IN_SP = systemParams.MIN_BOLD_IN_SP();
+        COLL_GAS_COMPENSATION_DIVISOR = systemParams.COLL_GAS_COMPENSATION_DIVISOR();
     }
 
     function openTrove(uint256 borrowed) external returns (uint256 debt) {

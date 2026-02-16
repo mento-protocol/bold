@@ -1,0 +1,243 @@
+// SPDX-License-Identifier: MIT
+
+pragma solidity 0.8.24;
+
+import "../Interfaces/IOracleAdapter.sol";
+import "../Interfaces/IPriceFeed.sol";
+import "../Interfaces/IBorrowerOperations.sol";
+
+import {OwnableUpgradeable} from "openzeppelin-contracts-upgradeable/contracts/access/OwnableUpgradeable.sol";
+/**
+ * @title FXPriceFeed
+ * @author Mento Labs
+ * @notice A contract that fetches the price of an FX rate from an OracleAdapter.
+ *         Implements emergency shutdown functionality to handle oracle failures.
+ */
+
+contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
+    /* ==================== State Variables ==================== */
+
+    /// @notice The OracleAdapter contract that provides FX rate data
+    IOracleAdapter public oracleAdapter;
+
+    /// @notice The identifier address for the specific rate feed to query
+    address public rateFeedID;
+
+    // @notice Whether the rate from the OracleAdapter should be inverted
+    bool public invertRateFeed;
+
+    /// @notice The grace period for the L2 sequencer to recover from failure
+    uint256 public l2SequencerGracePeriod;
+
+    /// @notice The watchdog contract address authorized to trigger emergency shutdown
+    address public watchdogAddress;
+
+    /// @notice The BorrowerOperations contract
+    IBorrowerOperations public borrowerOperations;
+
+    /// @notice The last valid price returned by the OracleAdapter
+    uint256 public lastValidPrice;
+
+    /// @notice Whether the contract has been shutdown due to an oracle failure
+    bool public isShutdown;
+
+    /// @notice Thrown when the attempting to shutdown an already shutdown contract
+    error AlreadyShutdown();
+
+    /// @notice Thrown when a non-watchdog address attempts to shutdown the contract
+    error OnlyWatchdog();
+    /// @notice Thrown when a zero address is provided as a parameter
+    error ZeroAddress();
+    /// @notice Thrown when an invalid grace period is provided
+    error InvalidL2SequencerGracePeriod();
+
+    /// @notice Emitted when the OracleAdapter contract is updated
+    /// @param _oldOracleAdapterAddress The previous OracleAdapter contract
+    /// @param _newOracleAdapterAddress The new OracleAdapter contract
+    event OracleAdapterUpdated(address indexed _oldOracleAdapterAddress, address indexed _newOracleAdapterAddress);
+
+    /// @notice Emitted when the rate feed ID is updated
+    /// @param _oldRateFeedID The previous rate feed ID
+    /// @param _newRateFeedID The new rate feed ID
+    event RateFeedIDUpdated(address indexed _oldRateFeedID, address indexed _newRateFeedID);
+
+    /// @notice Emitted when the invert rate feed flag is updated
+    /// @param _oldInvertRateFeed The previous invert rate feed flag
+    /// @param _newInvertRateFeed The new invert rate feed flag
+    event InvertRateFeedUpdated(bool _oldInvertRateFeed, bool _newInvertRateFeed);
+
+    /// @notice Emitted when the L2 sequencer grace period is updated
+    /// @param _oldL2SequencerGracePeriod The previous L2 sequencer grace period
+    /// @param _newL2SequencerGracePeriod The new L2 sequencer grace period
+    event L2SequencerGracePeriodUpdated(uint256 indexed _oldL2SequencerGracePeriod, uint256 indexed _newL2SequencerGracePeriod);
+
+    /// @notice Emitted when the watchdog address is updated
+    /// @param _oldWatchdogAddress The previous watchdog address
+    /// @param _newWatchdogAddress The new watchdog address
+    event WatchdogAddressUpdated(address indexed _oldWatchdogAddress, address indexed _newWatchdogAddress);
+
+    /// @notice Emitted when the contract is shutdown due to oracle failure
+    event FXPriceFeedShutdown();
+
+    /**
+     * @notice Contract constructor
+     * @param disableInitializers Boolean to disable initializers for implementation contract
+     */
+    constructor(bool disableInitializers) {
+        if (disableInitializers) {
+            _disableInitializers();
+        }
+    }
+
+    /**
+     * @notice Initializes the FXPriceFeed contract
+     * @param _oracleAdapterAddress The address of the OracleAdapter contract
+     * @param _rateFeedID The address of the rate feed ID
+     * @param _invertRateFeed Whether the rate from the OracleAdapter should be inverted
+     * @param _l2SequencerGracePeriod The grace period for the L2 sequencer to recover from failure
+     * @param _borrowerOperationsAddress The address of the BorrowerOperations contract
+     * @param _watchdogAddress The address of the watchdog contract
+     * @param _initialOwner The address of the initial owner
+     */
+    function initialize(
+        address _oracleAdapterAddress,
+        address _rateFeedID,
+        bool _invertRateFeed,
+        uint256 _l2SequencerGracePeriod,
+        address _borrowerOperationsAddress,
+        address _watchdogAddress,
+        address _initialOwner
+    ) external initializer {
+        if (_oracleAdapterAddress == address(0)) revert ZeroAddress();
+        if (_rateFeedID == address(0)) revert ZeroAddress();
+        if (_borrowerOperationsAddress == address(0)) revert ZeroAddress();
+        if (_watchdogAddress == address(0)) revert ZeroAddress();
+        if (_initialOwner == address(0)) revert ZeroAddress();
+
+        oracleAdapter = IOracleAdapter(_oracleAdapterAddress);
+        rateFeedID = _rateFeedID;
+        invertRateFeed = _invertRateFeed;
+        l2SequencerGracePeriod = _l2SequencerGracePeriod;
+        borrowerOperations = IBorrowerOperations(_borrowerOperationsAddress);
+        watchdogAddress = _watchdogAddress;
+
+        fetchPrice();
+
+        _transferOwnership(_initialOwner);
+    }
+
+
+    /**
+     * @notice Sets the OracleAdapter contract
+     * @param _newOracleAdapterAddress The address of the new OracleAdapter contract
+     */
+    function setOracleAdapter(address _newOracleAdapterAddress) external onlyOwner {
+        if (_newOracleAdapterAddress == address(0)) revert ZeroAddress();
+
+        address oldOracleAdapter = address(oracleAdapter);
+        oracleAdapter = IOracleAdapter(_newOracleAdapterAddress);
+
+        emit OracleAdapterUpdated(oldOracleAdapter, _newOracleAdapterAddress);
+    }
+
+    /**
+     * @notice Sets the rate feed ID to be queried
+     * @param _newRateFeedID The address of the new rate feed ID
+     */
+    function setRateFeedID(address _newRateFeedID) external onlyOwner {
+        if (_newRateFeedID == address(0)) revert ZeroAddress();
+
+        address oldRateFeedID = rateFeedID;
+        rateFeedID = _newRateFeedID;
+
+        emit RateFeedIDUpdated(oldRateFeedID, _newRateFeedID);
+    }
+
+    /**
+     * @notice Sets the invert rate feed flag
+     * @param _invertRateFeed Whether the rate from the OracleAdapter should be inverted
+     */
+    function setInvertRateFeed(bool _invertRateFeed) external onlyOwner {
+        bool oldInvertRateFeed = invertRateFeed;
+        invertRateFeed = _invertRateFeed;
+
+        emit InvertRateFeedUpdated(oldInvertRateFeed, _invertRateFeed);
+    }
+
+    /**
+     * @notice Sets the L2 sequencer grace period
+     * @param _newL2SequencerGracePeriod The new L2 sequencer grace period (in seconds)
+     */
+    function setL2SequencerGracePeriod(uint256 _newL2SequencerGracePeriod) external onlyOwner {
+        if (_newL2SequencerGracePeriod == 0) revert InvalidL2SequencerGracePeriod();
+
+        uint256 oldL2SequencerGracePeriod = l2SequencerGracePeriod;
+        l2SequencerGracePeriod = _newL2SequencerGracePeriod;
+
+        emit L2SequencerGracePeriodUpdated(oldL2SequencerGracePeriod, _newL2SequencerGracePeriod);
+    }
+
+    /**
+     * @notice Sets the watchdog address
+     * @param _newWatchdogAddress The address of the new watchdog contract
+     */
+    function setWatchdogAddress(address _newWatchdogAddress) external onlyOwner {
+        if (_newWatchdogAddress == address(0)) revert ZeroAddress();
+
+        address oldWatchdogAddress = watchdogAddress;
+        watchdogAddress = _newWatchdogAddress;
+
+        emit WatchdogAddressUpdated(oldWatchdogAddress, _newWatchdogAddress);
+    }
+
+    /**
+     * @notice Checks if the L2 sequencer is up and the grace period has passed
+     * @return True if the L2 sequencer is up and the grace period has passed, false otherwise
+     */
+    function isL2SequencerUp() public view returns (bool) {
+        return oracleAdapter.isL2SequencerUp(l2SequencerGracePeriod);
+    }
+
+    /**
+     * @notice Fetches the price of the FX rate, if valid
+     * @dev If the contract is shutdown due to oracle failure, the last valid price is returned
+     * @return price The price of the FX rate
+     */
+    function fetchPrice() public returns (uint256 price) {
+        if (isShutdown) {
+            return lastValidPrice;
+        }
+
+        (uint256 numerator, uint256 denominator) = oracleAdapter.getFXRateIfValid(rateFeedID);
+
+        if (invertRateFeed) {
+            // Multiply by 1e18 to get the price in 18 decimals
+            price = (denominator * 1e18) / numerator;
+        } else {
+            // Denominator is always 1e18, so we only use the numerator as the price
+            price = numerator;
+        }
+
+        lastValidPrice = price;
+
+        return price;
+    }
+
+    /**
+     * @notice Shuts down the price feed contract due to oracle failure
+     * @dev Can only be called by the authorized watchdog address.
+     *      Once shutdown:
+     *      - The contract will only return the last valid price
+     *      - The BorrowerOperations and TroveManager contracts are notified to shut down the collateral branch
+     *      - The shutdown state is permanent and cannot be reversed
+     */
+    function shutdown() external {
+        if (isShutdown) revert AlreadyShutdown();
+        if (msg.sender != watchdogAddress) revert OnlyWatchdog();
+
+        isShutdown = true;
+        borrowerOperations.shutdownFromOracleFailure();
+
+        emit FXPriceFeedShutdown();
+    }
+}

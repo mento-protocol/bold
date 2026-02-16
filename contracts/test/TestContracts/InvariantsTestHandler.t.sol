@@ -24,30 +24,18 @@ import {Assertions} from "./Assertions.sol";
 import {BaseHandler} from "./BaseHandler.sol";
 import {BaseMultiCollateralTest} from "./BaseMultiCollateralTest.sol";
 import {TestDeployer} from "./Deployment.t.sol";
+import {ISystemParams} from "src/Interfaces/ISystemParams.sol";
 
 import {
     _100pct,
     _1pct,
-    COLL_GAS_COMPENSATION_CAP,
-    COLL_GAS_COMPENSATION_DIVISOR,
     DECIMAL_PRECISION,
-    ETH_GAS_COMPENSATION,
-    INITIAL_BASE_RATE,
-    INTEREST_RATE_ADJ_COOLDOWN,
-    MAX_ANNUAL_BATCH_MANAGEMENT_FEE,
-    MAX_ANNUAL_INTEREST_RATE,
-    MIN_ANNUAL_INTEREST_RATE,
-    MIN_ANNUAL_INTEREST_RATE,
-    MIN_BOLD_IN_SP,
-    MIN_DEBT,
-    MIN_INTEREST_RATE_CHANGE_PERIOD,
     ONE_MINUTE,
     ONE_YEAR,
-    REDEMPTION_BETA,
-    REDEMPTION_FEE_FLOOR,
-    REDEMPTION_MINUTE_DECAY_FACTOR,
-    SP_YIELD_SPLIT,
-    UPFRONT_INTEREST_PERIOD,
+    MAX_ANNUAL_INTEREST_RATE,
+    MAX_ANNUAL_BATCH_MANAGEMENT_FEE,
+    MIN_INTEREST_RATE_CHANGE_PERIOD,
+    INTEREST_RATE_ADJ_COOLDOWN,
     URGENT_REDEMPTION_BONUS
 } from "src/Dependencies/Constants.sol";
 
@@ -57,20 +45,11 @@ uint256 constant TIME_DELTA_MAX = ONE_YEAR;
 uint256 constant BORROWED_MIN = 0 ether; // Sometimes try borrowing too little
 uint256 constant BORROWED_MAX = 100_000 ether;
 
-uint256 constant INTEREST_RATE_MIN = MIN_ANNUAL_INTEREST_RATE - 1; // Sometimes try rates lower than the min
-uint256 constant INTEREST_RATE_MAX = MAX_ANNUAL_INTEREST_RATE + 1; // Sometimes try rates exceeding the max
-
 uint256 constant ICR_MIN = 1.1 ether - 1;
 uint256 constant ICR_MAX = 3 ether;
 
 uint256 constant TCR_MIN = 0.9 ether;
 uint256 constant TCR_MAX = 3 ether;
-
-uint256 constant BATCH_MANAGEMENT_FEE_MIN = 0;
-uint256 constant BATCH_MANAGEMENT_FEE_MAX = MAX_ANNUAL_BATCH_MANAGEMENT_FEE + 1; // Sometimes try too high
-
-uint256 constant RATE_CHANGE_PERIOD_MIN = MIN_INTEREST_RATE_CHANGE_PERIOD - 1; // Sometimes try too low
-uint256 constant RATE_CHANGE_PERIOD_MAX = TIME_DELTA_MAX;
 
 enum AdjustedTroveProperties {
     onlyColl,
@@ -361,7 +340,7 @@ contract InvariantsTestHandler is Assertions, BaseHandler, BaseMultiCollateralTe
     uint256 _handlerBold;
 
     // Used to keep track of base rate
-    uint256 _baseRate = INITIAL_BASE_RATE;
+    uint256 _baseRate;
     uint256 _timeSinceLastRedemption = 0;
 
     // Used to keep track of mintable interest
@@ -389,6 +368,25 @@ contract InvariantsTestHandler is Assertions, BaseHandler, BaseMultiCollateralTe
     // Urgent redemption transient state
     UrgentRedemptionTransientState _urgentRedemption;
 
+    uint256 constant BATCH_MANAGEMENT_FEE_MIN = 0;
+    uint256 constant BATCH_MANAGEMENT_FEE_MAX = MAX_ANNUAL_BATCH_MANAGEMENT_FEE + 1; // Sometimes try too high
+    uint256 constant INTEREST_RATE_MAX = MAX_ANNUAL_INTEREST_RATE + 1; // Sometimes try rates exceeding the max
+    uint256 constant RATE_CHANGE_PERIOD_MIN = MIN_INTEREST_RATE_CHANGE_PERIOD - 1; // Sometimes try too low
+
+    // System params-based variables
+    uint256 immutable INTEREST_RATE_MIN;
+    uint256 immutable RATE_CHANGE_PERIOD_MAX = TIME_DELTA_MAX;
+    uint256 immutable ETH_GAS_COMPENSATION;
+    uint256 immutable MIN_ANNUAL_INTEREST_RATE;
+    uint256 immutable MIN_DEBT;
+    uint256 immutable MIN_BOLD_IN_SP;
+    uint256 immutable REDEMPTION_MINUTE_DECAY_FACTOR;
+    uint256 immutable REDEMPTION_BETA;
+    uint256 immutable REDEMPTION_FEE_FLOOR;
+    uint256 immutable SP_YIELD_SPLIT;
+    uint256 immutable COLL_GAS_COMPENSATION_DIVISOR;
+    uint256 immutable COLL_GAS_COMPENSATION_CAP;
+
     constructor(Contracts memory contracts, bool assumeNoExpectedFailures) {
         _functionCaller = new FunctionCaller();
         _assumeNoExpectedFailures = assumeNoExpectedFailures;
@@ -404,6 +402,20 @@ contract InvariantsTestHandler is Assertions, BaseHandler, BaseMultiCollateralTe
             LIQ_PENALTY_REDIST[i] = c.troveManager.get_LIQUIDATION_PENALTY_REDISTRIBUTION();
             _price[i] = c.priceFeed.getPrice();
         }
+
+        // Set system params-based variables
+        INTEREST_RATE_MIN = systemParams.MIN_ANNUAL_INTEREST_RATE() - 1; // Sometimes try rates lower than the min
+        _baseRate = systemParams.INITIAL_BASE_RATE();
+        ETH_GAS_COMPENSATION = systemParams.ETH_GAS_COMPENSATION();
+        MIN_ANNUAL_INTEREST_RATE = systemParams.MIN_ANNUAL_INTEREST_RATE();
+        MIN_DEBT = systemParams.MIN_DEBT();
+        MIN_BOLD_IN_SP = systemParams.MIN_BOLD_IN_SP();
+        REDEMPTION_MINUTE_DECAY_FACTOR = systemParams.REDEMPTION_MINUTE_DECAY_FACTOR();
+        REDEMPTION_BETA = systemParams.REDEMPTION_BETA();
+        REDEMPTION_FEE_FLOOR = systemParams.REDEMPTION_FEE_FLOOR();
+        SP_YIELD_SPLIT = systemParams.SP_YIELD_SPLIT();
+        COLL_GAS_COMPENSATION_DIVISOR = systemParams.COLL_GAS_COMPENSATION_DIVISOR();
+        COLL_GAS_COMPENSATION_CAP = systemParams.COLL_GAS_COMPENSATION_CAP();
     }
 
     //////////////////////////////////////////////
@@ -2399,11 +2411,11 @@ contract InvariantsTestHandler is Assertions, BaseHandler, BaseMultiCollateralTe
         return _baseRate * decaySinceLastRedemption / DECIMAL_PRECISION;
     }
 
-    function _getBaseRateIncrease(uint256 boldSupply, uint256 redeemed) internal pure returns (uint256) {
+    function _getBaseRateIncrease(uint256 boldSupply, uint256 redeemed) internal view returns (uint256) {
         return boldSupply > 0 ? redeemed * DECIMAL_PRECISION / boldSupply / REDEMPTION_BETA : 0;
     }
 
-    function _getRedemptionRate(uint256 baseRate) internal pure returns (uint256) {
+    function _getRedemptionRate(uint256 baseRate) internal view returns (uint256) {
         return Math.min(REDEMPTION_FEE_FLOOR + baseRate, _100pct);
     }
 
@@ -3006,11 +3018,11 @@ contract InvariantsTestHandler is Assertions, BaseHandler, BaseMultiCollateralTe
                 return (selector, "AddRemoveManagers.NotOwnerNorRemoveManager()");
             }
 
-            if (selector == AddressesRegistry.InvalidMCR.selector) {
+            if (selector == ISystemParams.InvalidMCR.selector) {
                 return (selector, "BorrowerOperations.InvalidMCR()");
             }
 
-            if (selector == AddressesRegistry.InvalidSCR.selector) {
+            if (selector == ISystemParams.InvalidSCR.selector) {
                 return (selector, "BorrowerOperations.InvalidSCR()");
             }
 

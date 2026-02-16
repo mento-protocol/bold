@@ -37,15 +37,9 @@ interface IAddressesRegistry {
         IMultiTroveGetter multiTroveGetter;
         ICollateralRegistry collateralRegistry;
         IBoldToken boldToken;
-        IWETH WETH;
+        IERC20Metadata gasToken;
+        address liquidityStrategy;
     }
-
-    function CCR() external returns (uint256);
-    function SCR() external returns (uint256);
-    function MCR() external returns (uint256);
-    function BCR() external returns (uint256);
-    function LIQUIDATION_PENALTY_SP() external returns (uint256);
-    function LIQUIDATION_PENALTY_REDISTRIBUTION() external returns (uint256);
 
     function collToken() external view returns (IERC20Metadata);
     function borrowerOperations() external view returns (IBorrowerOperations);
@@ -64,7 +58,8 @@ interface IAddressesRegistry {
     function multiTroveGetter() external view returns (IMultiTroveGetter);
     function collateralRegistry() external view returns (ICollateralRegistry);
     function boldToken() external view returns (IBoldToken);
-    function WETH() external returns (IWETH);
+    function gasToken() external view returns (IERC20Metadata);
+    function liquidityStrategy() external view returns (address);
 
     function setAddresses(AddressVars memory _vars) external;
 }

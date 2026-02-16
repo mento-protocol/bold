@@ -49,8 +49,7 @@ contract DevTestSetup is BaseTest {
 
         TestDeployer deployer = new TestDeployer();
         TestDeployer.LiquityContractsDev memory contracts;
-        TestDeployer.Zappers memory zappers;
-        (contracts, collateralRegistry, boldToken, hintHelpers,, WETH, zappers) = deployer.deployAndConnectContracts();
+        (contracts, collateralRegistry, boldToken, hintHelpers,, WETH) = deployer.deployAndConnectContracts();
         addressesRegistry = contracts.addressesRegistry;
         collToken = contracts.collToken;
         activePool = contracts.activePool;
@@ -65,10 +64,7 @@ contract DevTestSetup is BaseTest {
         troveNFT = contracts.troveNFT;
         metadataNFT = addressesRegistry.metadataNFT();
         mockInterestRouter = contracts.interestRouter;
-        wethZapper = zappers.wethZapper;
-        gasCompZapper = zappers.gasCompZapper;
-        leverageZapperCurve = zappers.leverageZapperCurve;
-        leverageZapperUniV3 = zappers.leverageZapperUniV3;
+        systemParams = contracts.systemParams;
 
         // Give some Coll to test accounts, and approve it to BorrowerOperations
         uint256 initialCollAmount = 10_000_000_000e18;
@@ -82,6 +78,16 @@ contract DevTestSetup is BaseTest {
         BCR = troveManager.get_BCR();
         LIQUIDATION_PENALTY_SP = troveManager.get_LIQUIDATION_PENALTY_SP();
         LIQUIDATION_PENALTY_REDISTRIBUTION = troveManager.get_LIQUIDATION_PENALTY_REDISTRIBUTION();
+        
+        MIN_DEBT = systemParams.MIN_DEBT();
+        SP_YIELD_SPLIT = systemParams.SP_YIELD_SPLIT();
+        MIN_ANNUAL_INTEREST_RATE = systemParams.MIN_ANNUAL_INTEREST_RATE();
+        ETH_GAS_COMPENSATION = systemParams.ETH_GAS_COMPENSATION();
+        COLL_GAS_COMPENSATION_DIVISOR = systemParams.COLL_GAS_COMPENSATION_DIVISOR();
+        MIN_BOLD_IN_SP = systemParams.MIN_BOLD_IN_SP();
+        REDEMPTION_FEE_FLOOR = systemParams.REDEMPTION_FEE_FLOOR();
+        INITIAL_BASE_RATE = systemParams.INITIAL_BASE_RATE();
+        REDEMPTION_MINUTE_DECAY_FACTOR = systemParams.REDEMPTION_MINUTE_DECAY_FACTOR();
     }
 
     function _setupForWithdrawCollGainToTrove() internal returns (uint256, uint256, uint256) {
@@ -342,7 +348,7 @@ contract DevTestSetup is BaseTest {
         assertEq(uint8(troveManager.getTroveStatus(_troveIDs.B)), uint8(ITroveManager.Status.active));
     }
 
-    function _getSPYield(uint256 _aggInterest) internal pure returns (uint256) {
+    function _getSPYield(uint256 _aggInterest) internal view returns (uint256) {
         uint256 spYield = SP_YIELD_SPLIT * _aggInterest / 1e18;
         assertGt(spYield, 0);
         assertLe(spYield, _aggInterest);

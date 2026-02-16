@@ -11,6 +11,7 @@ import "./Interfaces/IAddressesRegistry.sol";
 import "./Interfaces/IBoldToken.sol";
 import "./Interfaces/IInterestRouter.sol";
 import "./Interfaces/IDefaultPool.sol";
+import "./Interfaces/ISystemParams.sol";
 
 /*
  * The Active Pool holds the collateral and Bold debt (but not Bold tokens) for all active troves.
@@ -29,6 +30,7 @@ contract ActivePool is IActivePool {
     address public immutable troveManagerAddress;
     address public immutable defaultPoolAddress;
 
+    ISystemParams public immutable systemParams;
     IBoldToken public immutable boldToken;
 
     IInterestRouter public immutable interestRouter;
@@ -71,7 +73,8 @@ contract ActivePool is IActivePool {
     event ActivePoolBoldDebtUpdated(uint256 _recordedDebtSum);
     event ActivePoolCollBalanceUpdated(uint256 _collBalance);
 
-    constructor(IAddressesRegistry _addressesRegistry) {
+    constructor(IAddressesRegistry _addressesRegistry, ISystemParams _systemParams) {
+        systemParams = _systemParams;
         collToken = _addressesRegistry.collToken();
         borrowerOperationsAddress = address(_addressesRegistry.borrowerOperations());
         troveManagerAddress = address(_addressesRegistry.troveManager());
@@ -113,7 +116,7 @@ contract ActivePool is IActivePool {
     }
 
     function calcPendingSPYield() external view returns (uint256) {
-        return calcPendingAggInterest() * SP_YIELD_SPLIT / DECIMAL_PRECISION;
+        return calcPendingAggInterest() * systemParams.SP_YIELD_SPLIT() / DECIMAL_PRECISION;
     }
 
     function calcPendingAggBatchManagementFee() public view returns (uint256) {
@@ -250,7 +253,7 @@ contract ActivePool is IActivePool {
 
         // Mint part of the BOLD interest to the SP and part to the router for LPs.
         if (mintedAmount > 0) {
-            uint256 spYield = SP_YIELD_SPLIT * mintedAmount / DECIMAL_PRECISION;
+            uint256 spYield = systemParams.SP_YIELD_SPLIT() * mintedAmount / DECIMAL_PRECISION;
             uint256 remainderToLPs = mintedAmount - spYield;
 
             boldToken.mint(address(interestRouter), remainderToLPs);

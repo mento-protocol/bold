@@ -3,16 +3,24 @@
 pragma solidity 0.8.24;
 
 import "./Interfaces/ICollateralRegistry.sol";
+import "./Interfaces/IActivePool.sol";
+import "./Interfaces/ISortedTroves.sol";
+import "./Interfaces/ISystemParams.sol";
 import "./Dependencies/LiquityMath.sol";
 import "./Dependencies/Constants.sol";
 import "./Interfaces/IHintHelpers.sol";
+import "./Types/LatestTroveData.sol";
+import "./Types/TroveChange.sol";
+import "./Types/LatestBatchData.sol";
 
 contract HintHelpers is IHintHelpers {
     string public constant NAME = "HintHelpers";
 
     ICollateralRegistry public immutable collateralRegistry;
+    address public immutable systemParamsAddress;
 
-    constructor(ICollateralRegistry _collateralRegistry) {
+    constructor(ICollateralRegistry _collateralRegistry, ISystemParams _systemParams) {
+        systemParamsAddress = address(_systemParams);
         collateralRegistry = _collateralRegistry;
     }
 
@@ -64,7 +72,7 @@ contract HintHelpers is IHintHelpers {
         }
     }
 
-    function _calcUpfrontFee(uint256 _debt, uint256 _avgInterestRate) internal pure returns (uint256) {
+    function _calcUpfrontFee(uint256 _debt, uint256 _avgInterestRate) internal view returns (uint256) {
         return _debt * _avgInterestRate * UPFRONT_INTEREST_PERIOD / ONE_YEAR / DECIMAL_PRECISION;
     }
 
