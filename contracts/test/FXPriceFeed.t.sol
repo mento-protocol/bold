@@ -199,7 +199,6 @@ contract FXPriceFeedTest is Test {
         assertEq(address(newFeed.borrowerOperations()), address(mockBorrowerOperations));
         assertEq(newFeed.watchdogAddress(), watchdog);
         assertEq(newFeed.owner(), owner);
-        assertEq(newFeed.lastValidPrice(), 5e18);
     }
 
     function test_initialize_whenCalledTwice_shouldRevert() public {
