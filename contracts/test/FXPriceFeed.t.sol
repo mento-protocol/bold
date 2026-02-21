@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
+
 import "./TestContracts/DevTestSetup.sol";
 import "../src/PriceFeeds/FXPriceFeed.sol";
+
 import { Test } from "forge-std/Test.sol";
 
 contract MockBorrowerOperations {
@@ -449,3 +451,4 @@ contract FXPriceFeedTest is Test {
         bool result = fxPriceFeed.isL2SequencerUp();
         assertFalse(result);
     }
+}
