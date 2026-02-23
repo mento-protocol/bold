@@ -121,8 +121,6 @@ contract FXPriceFeed is IPriceFeed, OwnableUpgradeable {
         borrowerOperations = IBorrowerOperations(_borrowerOperationsAddress);
         watchdogAddress = _watchdogAddress;
 
-        fetchPrice();
-
         _transferOwnership(_initialOwner);
     }
 
