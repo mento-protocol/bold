@@ -36,7 +36,7 @@ contract MetadataNFT is IMetadataNFT {
     function uri(TroveData memory _troveData) public view returns (string memory) {
         string memory attr = attributes(_troveData);
         return json.formattedMetadata(
-            string.concat("Mento Liquity V2 -", IERC20Metadata(_troveData._collToken).name()),
+            string.concat("Mento Liquity V2 - ", IERC20Metadata(_troveData._collToken).name()),
             string.concat(
                 "Mento Liquity V2 is a collateralized debt platform. Users can lock up ",
                 IERC20Metadata(_troveData._collToken).symbol(),
