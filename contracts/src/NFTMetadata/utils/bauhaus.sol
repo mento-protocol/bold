@@ -25,15 +25,8 @@ library bauhaus {
     function _bauhaus(string memory _collName, uint256 _troveId) internal pure returns (string memory) {
         bytes32 collSig = keccak256(bytes(_collName));
         uint256 variant = _troveId % 4;
-
-        if (collSig == keccak256("WETH")) {
-            return _img1(variant);
-        } else if (collSig == keccak256("wstETH")) {
-            return _img2(variant);
-        } else {
-            // assume rETH
-            return _img3(variant);
-        }
+        // Always use _img1 because in MentoV3 we only have one collateral token
+        return _img1(variant);
     }
 
     function _colorCode2Hex(colorCode _color) private pure returns (string memory) {
