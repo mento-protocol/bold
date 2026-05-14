@@ -54,6 +54,52 @@ type Trove @entity(immutable: false) {
   redemptionCount: Int!
   redeemedColl: BigInt!
   redeemedDebt: BigInt!
+  operations: [TroveOperation!]! @derivedFrom(field: "trove")
+}
+
+# Mirrors ITroveEvents.Operation. Order must match the contract enum so a uint8
+# can be stored as the corresponding string value with no remapping.
+enum TroveOperationKind {
+  openTrove
+  closeTrove
+  adjustTrove
+  adjustTroveInterestRate
+  applyPendingDebt
+  liquidate
+  redeemCollateral
+  openTroveAndJoinBatch
+  setInterestBatchManager
+  removeFromBatch
+}
+
+# Immutable per-operation history row. One row per TroveOperation event.
+# IDs combine tx hash + log index so they are stable across reorgs.
+type TroveOperation @entity(immutable: true) {
+  id: Bytes! # tx hash concatenated with logIndex
+  trove: Trove!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+  transactionHash: Bytes!
+  logIndex: BigInt!
+  operation: TroveOperationKind!
+  initiator: Bytes! # transaction.from
+  # Signed changes from the operation itself. Excludes accrued/redistributed values.
+  collateralDelta: BigInt!
+  debtDelta: BigInt!
+  # Post-state snapshots, captured after TroveUpdated has been applied.
+  newCollateral: BigInt!
+  newDebt: BigInt!
+  newInterestRate: BigInt!
+  # Accrued portions from redistribution. Always positive.
+  collIncreaseFromRedist: BigInt!
+  debtIncreaseFromRedist: BigInt!
+  # Upfront borrowing fee added to debt this op (zero outside open/adjust paths).
+  upfrontFee: BigInt!
+  # Enriched from same-tx Redemption / Liquidation events when applicable.
+  redemptionPrice: BigInt
+  liquidationPrice: BigInt
+  # Set when the op happened against a trove in a batch.
+  batch: InterestBatch
 }
 
 type BorrowerInfo @entity(immutable: false) {

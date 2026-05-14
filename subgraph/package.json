@@ -4,10 +4,14 @@
   "license": "MIT",
   "version": "1.0.0",
   "scripts": {
-    "codegen": "pnpm graph codegen"
+    "codegen": "pnpm graph codegen",
+    "build": "pnpm graph build",
+    "test": "pnpm graph test"
   },
   "devDependencies": {
-    "@graphprotocol/graph-cli": "^0.97.0"
+    "@graphprotocol/graph-cli": "^0.97.0",
+    "assemblyscript": "0.19.23",
+    "matchstick-as": "^0.6.0"
   },
   "dependencies": {
     "@graphprotocol/graph-ts": "^0.38.0",
