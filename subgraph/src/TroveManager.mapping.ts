@@ -285,18 +285,23 @@ function decodeUint256At(data: Bytes, wordIndex: i32): BigInt {
   );
 }
 
-// Both Redemption and Liquidation are global per-tx events: one is emitted
-// per redemption / liquidation transaction, while many TroveOperation events
-// may fire for affected troves. We attach the global price to each per-trove
-// row in the same tx via receipt walking — the same pattern as
-// getBatchUpdatedEventFrom.
+// Redemption and Liquidation are emitted from the TroveManager that did the
+// redemption / liquidation. Each Mento V3 branch (GBPm/CHFm/JPYm) has its own
+// TroveManager emitting its own branch-priced events, so we must match the
+// log's address to the TroveManager that emitted this TroveOperation —
+// otherwise a tx touching multiple branches would attach the wrong branch's
+// price.
 function extractRedemptionPrice(event: TroveOperationEvent): BigInt | null {
   let receipt = event.receipt;
   if (!receipt) return null;
 
   for (let i = 0; i < receipt.logs.length; ++i) {
     let log = receipt.logs[i];
-    if (log.topics.length > 0 && log.topics[0].equals(REDEMPTION_TOPIC)) {
+    if (
+      log.address.equals(event.address)
+      && log.topics.length > 0
+      && log.topics[0].equals(REDEMPTION_TOPIC)
+    ) {
       // Redemption(_attemptedBoldAmount, _actualBoldAmount, _ETHSent, _ETHFee,
       //            _price, _redemptionPrice) — _redemptionPrice is word 5.
       return decodeUint256At(log.data, 5);
@@ -311,7 +316,11 @@ function extractLiquidationPrice(event: TroveOperationEvent): BigInt | null {
 
   for (let i = 0; i < receipt.logs.length; ++i) {
     let log = receipt.logs[i];
-    if (log.topics.length > 0 && log.topics[0].equals(LIQUIDATION_TOPIC)) {
+    if (
+      log.address.equals(event.address)
+      && log.topics.length > 0
+      && log.topics[0].equals(LIQUIDATION_TOPIC)
+    ) {
       // Liquidation(_debtOffsetBySP, _debtRedistributed, _boldGasCompensation,
       //             _collGasCompensation, _collSentToSP, _collRedistributed,
       //             _collSurplus, _L_ETH, _L_boldDebt, _price)

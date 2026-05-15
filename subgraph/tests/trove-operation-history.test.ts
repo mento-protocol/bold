@@ -66,8 +66,12 @@ function buildReceiptWithLog(
   topic: Bytes,
   data: Bytes,
 ): ethereum.TransactionReceipt {
+  // The mapping filters receipt logs by `log.address.equals(event.address)`,
+  // so the synthetic log must claim to come from the same TroveManager that
+  // emitted the TroveOperation. event.address is the matchstick default
+  // address (0xA160...eC2A) unless overridden.
   let log = new ethereum.Log(
-    Address.zero(),
+    event.address,
     [topic],
     data,
     event.block.hash,
@@ -250,6 +254,69 @@ describe("handleTroveOperation history rows", () => {
     assert.fieldEquals("TroveOperation", opId, "redemptionPrice", expectedRedemptionPrice.toString());
     assert.fieldEquals("TroveOperation", opId, "collateralDelta", collChange.toString());
     assert.fieldEquals("TroveOperation", opId, "debtDelta", debtChange.toString());
+  });
+
+  test("redeemCollateral ignores Redemption logs emitted by a different branch's TroveManager", () => {
+    let postDebt = BigInt.fromString("900000000000000000000");
+    let postColl = BigInt.fromString("1800000000000000000000");
+    let postRate = BigInt.fromString("60000000000000000");
+    createTrove(postDebt, postColl, postRate);
+
+    let event = newTroveOperationEvent(
+      6, // redeemCollateral
+      postRate,
+      BigInt.zero(),
+      BigInt.zero(),
+      BigInt.fromString("-100000000000000000000"),
+      BigInt.zero(),
+      BigInt.fromString("-200000000000000000000"),
+    );
+
+    // Stuff a Redemption log from a different TroveManager into the receipt.
+    // The filter must reject it; redemptionPrice should remain null.
+    let foreignBranchPrice = BigInt.fromString("999000000000000000000");
+    let foreignData = packUint256s([
+      BigInt.fromI32(1),
+      BigInt.fromI32(1),
+      BigInt.fromI32(1),
+      BigInt.fromI32(1),
+      BigInt.fromI32(1),
+      foreignBranchPrice,
+    ]);
+    let foreignAddress = Address.fromString("0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+    let foreignLog = new ethereum.Log(
+      foreignAddress,
+      [REDEMPTION_TOPIC],
+      foreignData,
+      event.block.hash,
+      Bytes.fromUint8Array(new Uint8Array(0)),
+      event.transaction.hash,
+      BigInt.zero(),
+      BigInt.zero(),
+      BigInt.zero(),
+      "default",
+      null,
+    );
+    event.receipt = new ethereum.TransactionReceipt(
+      event.transaction.hash,
+      BigInt.zero(),
+      event.block.hash,
+      event.block.number,
+      BigInt.zero(),
+      BigInt.zero(),
+      Address.zero(),
+      [foreignLog],
+      BigInt.fromI32(1),
+      Bytes.empty(),
+      Bytes.empty(),
+    );
+
+    handleTroveOperation(event);
+
+    let opId = event.transaction.hash.concatI32(event.logIndex.toI32()).toHexString();
+    assert.fieldEquals("TroveOperation", opId, "operation", "redeemCollateral");
+    // redemptionPrice should be unset (the foreign log was rejected).
+    assert.fieldEquals("TroveOperation", opId, "redemptionPrice", "null");
   });
 
   test("liquidate extracts liquidationPrice from same-tx Liquidation log", () => {

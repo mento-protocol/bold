@@ -39,28 +39,14 @@
     "BoldToken": {
       "address": "0x0e18b884ec3095f7c27bbbeb0a266a5674bcaffd"
     },
+    "BoldTokenCHFm": {
+      "address": "0x0000000000000000000000000000000000000000"
+    },
+    "BoldTokenJPYm": {
+      "address": "0x0000000000000000000000000000000000000000"
+    },
     "Governance": {
       "address": "0x79fdb65c20e75f8961d54f6714d2fcc4c30d1073"
-    }
-  },
-  "mainnet": {
-    "BoldToken": {
-      "address": "0x6440f144b7e50d6a8439336510312d2f54beb01d",
-      "startBlock": 22483043
-    },
-    "Governance": {
-      "address": "0x807def5e7d057df05c796f4bc75c3fe82bd6eee1",
-      "startBlock": 22496547
-    }
-  },
-  "sepolia": {
-    "BoldToken": {
-      "address": "0x181dff47198bf3f3ed65877332e8395eb6817c4c",
-      "startBlock": 8316063
-    },
-    "Governance": {
-      "address": "0xf68db4e851d89daf0fb842b01f75d94e0cb44f49",
-      "startBlock": 8316191
     }
   }
 }
