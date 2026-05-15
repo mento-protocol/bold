@@ -95,36 +95,6 @@ dataSources:
           handler: handleCollateralRegistryAddressChanged
       file: ./src/BoldToken.mapping.ts
     network: celo-sepolia
-  - kind: ethereum/contract
-    name: Governance
-    source:
-      abi: Governance
-      address: "0x0000000000000000000000000000000000000000"
-      startBlock: 19187423
-    mapping:
-      kind: ethereum/events
-      apiVersion: 0.0.9
-      language: wasm/assemblyscript
-      entities:
-        - GovernanceAllocation
-        - GovernanceInitiative
-        - GovernanceUser
-      abis:
-        - name: Governance
-          file: ../contracts/out/Governance.sol/Governance.json
-      eventHandlers:
-        - event: DepositLQTY(indexed
-            address,address,uint256,uint256,uint256,uint256,uint256)
-          handler: handleDepositLQTY
-        - event: WithdrawLQTY(indexed
-            address,address,uint256,uint256,uint256,uint256,uint256,uint256)
-          handler: handleWithdrawLQTY
-        - event: AllocateLQTY(indexed address,indexed address,int256,int256,uint256,uint8)
-          handler: handleAllocateLQTY
-        - event: RegisterInitiative(address,address,uint256,uint8)
-          handler: handleRegisterInitiative
-      file: ./src/Governance.mapping.ts
-    network: celo-sepolia
 templates:
   - name: TroveManager
     kind: ethereum/contract

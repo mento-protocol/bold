@@ -11,10 +11,6 @@
     "BoldTokenJPYm": {
       "address": "0xd2E65aF47d927d5E84f384AE6BAC4F97c3da65df",
       "startBlock": 65390636
-    },
-    "Governance": {
-      "address": "0x0000000000000000000000000000000000000000",
-      "startBlock": 60668167
     }
   },
   "celo-sepolia": {
@@ -29,10 +25,6 @@
     "BoldTokenJPYm": {
       "address": "0xeD54259166EbbFe72083FC37eE2a00e922fbA84D",
       "startBlock": 23671448
-    },
-    "Governance": {
-      "address": "0x0000000000000000000000000000000000000000",
-      "startBlock": 19187423
     }
   },
   "local": {
@@ -44,9 +36,6 @@
     },
     "BoldTokenJPYm": {
       "address": "0x0000000000000000000000000000000000000000"
-    },
-    "Governance": {
-      "address": "0x79fdb65c20e75f8961d54f6714d2fcc4c30d1073"
     }
   }
 }
