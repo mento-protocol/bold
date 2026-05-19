@@ -8,13 +8,27 @@ import { TroveManager as TroveManagerContract } from "../generated/BoldToken/Tro
 import { Collateral, CollateralAddresses } from "../generated/schema";
 import { TroveManager as TroveManagerTemplate, TroveNFT as TroveNFTTemplate } from "../generated/templates";
 
+// Mento V3 runs one independent CDP instance per FX-pegged stable (GBPm, CHFm,
+// JPYm, ...). Each instance has its own CollateralRegistry, and each registry
+// starts numbering its collaterals at index 0. Naming entities by `collIndex`
+// alone collides across branches — every branch would write to Collateral
+// id="0", Trove id="0:<troveId>", etc.
+//
+// We namespace every entity ID by the branch's TroveManager address (each
+// branch's TroveManager is unique, and it's the address that emits the
+// CollateralRegistryAddressChanged event we're handling, so it's already in
+// `event.address`). The resulting collId looks like
+// "0x<troveManager>:<collIndex>" and flows through DataSourceContext into
+// every downstream entity ID (Trove, InterestRateBracket, InterestBatch,
+// CollateralAddresses).
 function addCollateral(
+  branchPrefix: string,
   collIndex: i32,
   totalCollaterals: i32,
   tokenAddress: Address,
   troveManagerAddress: Address,
 ): void {
-  let collId = collIndex.toString();
+  let collId = branchPrefix + ":" + collIndex.toString();
 
   let collateral = new Collateral(collId);
   collateral.collIndex = collIndex;
@@ -53,6 +67,7 @@ function addCollateral(
 }
 
 export function handleCollateralRegistryAddressChanged(event: CollateralRegistryAddressChangedEvent): void {
+  let branchPrefix = event.address.toHexString();
   let registry = CollateralRegistryContract.bind(event.params._newCollateralRegistryAddress);
   let totalCollaterals = registry.totalCollaterals().toI32();
 
@@ -64,9 +79,10 @@ export function handleCollateralRegistryAddressChanged(event: CollateralRegistry
       break;
     }
 
-    // we use the token address as the id for the collateral
-    if (!Collateral.load(tokenAddress.toHexString())) {
+    let collId = branchPrefix + ":" + index.toString();
+    if (!Collateral.load(collId)) {
       addCollateral(
+        branchPrefix,
         index,
         totalCollaterals,
         tokenAddress,

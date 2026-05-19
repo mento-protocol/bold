@@ -1,5 +1,5 @@
 import { Address, BigInt, Bytes, dataSource, ethereum } from "@graphprotocol/graph-ts";
-import { InterestBatch, InterestRateBracket, Trove } from "../generated/schema";
+import { InterestBatch, InterestRateBracket, Trove, TroveOperation } from "../generated/schema";
 import {
   BatchedTroveUpdated as BatchedTroveUpdatedEvent,
   BatchUpdated as BatchUpdatedEvent,
@@ -13,17 +13,27 @@ import {
 const OP_OPEN_TROVE = 0;
 const OP_CLOSE_TROVE = 1;
 const OP_ADJUST_TROVE = 2;
-// const OP_ADJUST_TROVE_INTEREST_RATE = 3;
+const OP_ADJUST_TROVE_INTEREST_RATE = 3;
 const OP_APPLY_PENDING_DEBT = 4;
 const OP_LIQUIDATE = 5;
 const OP_REDEEM_COLLATERAL = 6;
 const OP_OPEN_TROVE_AND_JOIN_BATCH = 7;
-// const OP_SET_INTEREST_BATCH_MANAGER = 8;
-// const OP_REMOVE_FROM_BATCH = 9;
+const OP_SET_INTEREST_BATCH_MANAGER = 8;
+const OP_REMOVE_FROM_BATCH = 9;
 
 const FLASH_LOAN_TOPIC = Bytes.fromHexString(
   // keccak256("FlashLoan(address,address,uint256,uint256)")
   "0x0d7d75e01ab95780d3cd1c8ec0dd6c2ce19e3a20427eec8bf53283b6fb8e95f0",
+);
+
+const REDEMPTION_TOPIC = Bytes.fromHexString(
+  // keccak256("Redemption(uint256,uint256,uint256,uint256,uint256,uint256)")
+  "0x84ec8e1674d62e3a8ff294b1a7f53527d2d10291765fadf94e0ce431b2334334",
+);
+
+const LIQUIDATION_TOPIC = Bytes.fromHexString(
+  // keccak256("Liquidation(uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256,uint256)")
+  "0x7243af9a1cff94d3429b2ee00b78c1c10589259f20dc167cb67704f38f9e824e",
 );
 
 function decodeAddress(data: Bytes, i: i32 = 0): ethereum.Value {
@@ -210,6 +220,115 @@ export function handleTroveOperation(event: TroveOperationEvent): void {
   }
 
   trove.save();
+
+  recordTroveOperation(event, trove);
+}
+
+// Writes one immutable TroveOperation history row per event. The preceding
+// TroveUpdated / BatchedTroveUpdated handlers have already moved `trove` to
+// its post-op state, so trove.debt / trove.deposit / trove.interestRate /
+// trove.interestBatch can be used directly as the snapshot.
+function recordTroveOperation(event: TroveOperationEvent, trove: Trove): void {
+  let op = new TroveOperation(
+    event.transaction.hash.concatI32(event.logIndex.toI32()),
+  );
+  op.trove = trove.id;
+  op.blockNumber = event.block.number;
+  op.timestamp = event.block.timestamp;
+  op.transactionHash = event.transaction.hash;
+  op.logIndex = event.logIndex;
+  op.operation = troveOperationKind(event.params._operation);
+  op.initiator = event.transaction.from;
+  op.collateralDelta = event.params._collChangeFromOperation;
+  op.debtDelta = event.params._debtChangeFromOperation;
+  op.newCollateral = trove.deposit;
+  op.newDebt = trove.debt;
+  op.newInterestRate = event.params._annualInterestRate;
+  op.collIncreaseFromRedist = event.params._collIncreaseFromRedist;
+  op.debtIncreaseFromRedist = event.params._debtIncreaseFromRedist;
+  op.upfrontFee = event.params._debtIncreaseFromUpfrontFee;
+  op.batch = trove.interestBatch;
+
+  let kind = event.params._operation;
+  if (kind === OP_REDEEM_COLLATERAL) {
+    op.redemptionPrice = extractRedemptionPrice(event);
+  } else if (kind === OP_LIQUIDATE) {
+    op.liquidationPrice = extractLiquidationPrice(event);
+  }
+
+  op.save();
+}
+
+function troveOperationKind(opIndex: i32): string {
+  // Order must match ITroveEvents.Operation and the TroveOperationKind enum
+  // in schema.graphql.
+  if (opIndex === OP_OPEN_TROVE) return "openTrove";
+  if (opIndex === OP_CLOSE_TROVE) return "closeTrove";
+  if (opIndex === OP_ADJUST_TROVE) return "adjustTrove";
+  if (opIndex === OP_ADJUST_TROVE_INTEREST_RATE) return "adjustTroveInterestRate";
+  if (opIndex === OP_APPLY_PENDING_DEBT) return "applyPendingDebt";
+  if (opIndex === OP_LIQUIDATE) return "liquidate";
+  if (opIndex === OP_REDEEM_COLLATERAL) return "redeemCollateral";
+  if (opIndex === OP_OPEN_TROVE_AND_JOIN_BATCH) return "openTroveAndJoinBatch";
+  if (opIndex === OP_SET_INTEREST_BATCH_MANAGER) return "setInterestBatchManager";
+  if (opIndex === OP_REMOVE_FROM_BATCH) return "removeFromBatch";
+  throw new Error("Unknown TroveOperation kind: " + opIndex.toString());
+}
+
+// Decode the Nth uint256 from a non-indexed event's data blob. ABI lays
+// non-indexed args out as packed 32-byte words in order.
+function decodeUint256At(data: Bytes, wordIndex: i32): BigInt {
+  return BigInt.fromUnsignedBytes(
+    Bytes.fromUint8Array(
+      data.subarray(wordIndex * 32, wordIndex * 32 + 32).reverse(),
+    ),
+  );
+}
+
+// Redemption and Liquidation are emitted from the TroveManager that did the
+// redemption / liquidation. Each Mento V3 branch (GBPm/CHFm/JPYm) has its own
+// TroveManager emitting its own branch-priced events, so we must match the
+// log's address to the TroveManager that emitted this TroveOperation —
+// otherwise a tx touching multiple branches would attach the wrong branch's
+// price.
+function extractRedemptionPrice(event: TroveOperationEvent): BigInt | null {
+  let receipt = event.receipt;
+  if (!receipt) return null;
+
+  for (let i = 0; i < receipt.logs.length; ++i) {
+    let log = receipt.logs[i];
+    if (
+      log.address.equals(event.address)
+      && log.topics.length > 0
+      && log.topics[0].equals(REDEMPTION_TOPIC)
+    ) {
+      // Redemption(_attemptedBoldAmount, _actualBoldAmount, _ETHSent, _ETHFee,
+      //            _price, _redemptionPrice) — _redemptionPrice is word 5.
+      return decodeUint256At(log.data, 5);
+    }
+  }
+  return null;
+}
+
+function extractLiquidationPrice(event: TroveOperationEvent): BigInt | null {
+  let receipt = event.receipt;
+  if (!receipt) return null;
+
+  for (let i = 0; i < receipt.logs.length; ++i) {
+    let log = receipt.logs[i];
+    if (
+      log.address.equals(event.address)
+      && log.topics.length > 0
+      && log.topics[0].equals(LIQUIDATION_TOPIC)
+    ) {
+      // Liquidation(_debtOffsetBySP, _debtRedistributed, _boldGasCompensation,
+      //             _collGasCompensation, _collSentToSP, _collRedistributed,
+      //             _collSurplus, _L_ETH, _L_boldDebt, _price)
+      // _price is word 9.
+      return decodeUint256At(log.data, 9);
+    }
+  }
+  return null;
 }
 
 function inferLeverage(event: TroveOperationEvent): boolean {

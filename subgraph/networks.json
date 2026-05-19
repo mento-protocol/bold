@@ -1,30 +1,41 @@
 {
+  "celo": {
+    "BoldToken": {
+      "address": "0xb38aEf2bF4e34B997330D626EBCd7629De3885C9",
+      "startBlock": 60668167
+    },
+    "BoldTokenCHFm": {
+      "address": "0x4e105fEf015dB26320c077427bd605acEad9262E",
+      "startBlock": 65390610
+    },
+    "BoldTokenJPYm": {
+      "address": "0xd2E65aF47d927d5E84f384AE6BAC4F97c3da65df",
+      "startBlock": 65390636
+    }
+  },
+  "celo-sepolia": {
+    "BoldToken": {
+      "address": "0x3ADFF16949513480E051F451748Ee8B801731c46",
+      "startBlock": 19187423
+    },
+    "BoldTokenCHFm": {
+      "address": "0xc21dc07eC1707d315A7eff31A6556e628E43A3f8",
+      "startBlock": 23671277
+    },
+    "BoldTokenJPYm": {
+      "address": "0xeD54259166EbbFe72083FC37eE2a00e922fbA84D",
+      "startBlock": 23671448
+    }
+  },
   "local": {
     "BoldToken": {
       "address": "0x0e18b884ec3095f7c27bbbeb0a266a5674bcaffd"
     },
-    "Governance": {
-      "address": "0x79fdb65c20e75f8961d54f6714d2fcc4c30d1073"
-    }
-  },
-  "mainnet": {
-    "BoldToken": {
-      "address": "0x6440f144b7e50d6a8439336510312d2f54beb01d",
-      "startBlock": 22483043
+    "BoldTokenCHFm": {
+      "address": "0x0000000000000000000000000000000000000000"
     },
-    "Governance": {
-      "address": "0x807def5e7d057df05c796f4bc75c3fe82bd6eee1",
-      "startBlock": 22496547
-    }
-  },
-  "sepolia": {
-    "BoldToken": {
-      "address": "0x181dff47198bf3f3ed65877332e8395eb6817c4c",
-      "startBlock": 8316063
-    },
-    "Governance": {
-      "address": "0xf68db4e851d89daf0fb842b01f75d94e0cb44f49",
-      "startBlock": 8316191
+    "BoldTokenJPYm": {
+      "address": "0x0000000000000000000000000000000000000000"
     }
   }
 }
