@@ -1,0 +1,21 @@
+# Bold Instructions
+
+For any Mento protocol-level question that crosses beyond this CDP contracts
+repo, first read the private `mento-master-context` router when the checkout is
+available:
+
+```text
+../mento-master-context/.agents/mento-context/README.md
+```
+
+This applies before broad repo searches for Mento deployments, addresses, ABIs,
+live on-chain state, stable supply, reserve data, monitoring/data semantics,
+docs, the whitepaper, business model, or legal/risk framing. Load only the
+relevant master-context card(s), then return to this repo for CDP contract
+implementation details.
+
+This repo is source of truth for the Bold contract code used by Mento
+CDP-backed assets, not for published Mento deployment addresses or current
+chain state. Resolve deployed addresses through `deployments-v2`; verify current
+values with live RPC at an explicit block. When answering, mention which
+master-context card you used or state that the checkout was unavailable.
